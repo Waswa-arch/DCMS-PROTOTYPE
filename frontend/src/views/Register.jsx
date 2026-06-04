@@ -1,238 +1,191 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
-import { ShieldCheck, User, Lock, Mail, CreditCard, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { ShieldCheck, User, Mail, Lock, BookOpen, ArrowLeft, CheckCircle2, AlertTriangle } from 'lucide-react';
 
-/**
- * INSTITUTIONAL USER SELF-REGISTRATION MANAGEMENT INTERFACE:
- * Captures user identity parameters, enforces client-side structural invariants,
- * dispatches creation payloads to the server, and handles routing setup.
- */
-const Register = () => {
-  const { apiUrl } = useAuth();
-  const navigate = useNavigate();
-
+const Register = ({ onNavigate }) => {
+  const { register } = useAuth();
+  
+  // --- APPLICATION STATE HOOKS ---
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [idNumber, setIdNumber] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState('STUDENT');
+  const [regNumber, setRegNumber] = useState('');
   
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState(null);
-  const [successMessage, setSuccessMessage] = useState(null);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
 
-  const handleFormSubmit = async (e) => {
+  // --- SUBMISSION ENTRY DISPATCHER ---
+  const handleRegisterSubmit = async (e) => {
     e.preventDefault();
-    setErrorMessage(null);
-    setSuccessMessage(null);
+    setError(null);
+    setSuccess(false);
 
-    // Baseline password parity match verification
-    if (password !== confirmPassword) {
-      return setErrorMessage('Client Validation Error: Entered passwords do not match.');
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      setError("Please complete all required fields.");
+      return;
     }
 
-    setIsSubmitting(true);
+    if (role === 'STUDENT' && !regNumber.trim()) {
+      setError("Student accounts require a valid University Registration Number.");
+      return;
+    }
 
     try {
-      const response = await axios.post(`${apiUrl}/auth/register`, {
-        name,
-        email,
-        idNumber,
-        password,
-        role: 'STUDENT' // Force consumer layout declaration to standard student identity scope
-      });
-
-      if (response.data.success) {
-        setSuccessMessage('Profile compilation successful! Redirecting to secure login station...');
-        setIsSubmitting(false);
-        
-        // Hold screen for 2 seconds to let the user review success context before bouncing
-        setTimeout(() => {
-          navigate('/login');
-        }, 2200);
-      }
-    } catch (error) {
-      setErrorMessage(
-        error.response?.data?.message || 'Server transactional refusal. Unable to compile profile logs.'
-      );
-      setIsSubmitting(false);
+      // Writes new user data directly into our Context Ledger
+      register(name.trim(), email.trim(), password, role, regNumber.trim());
+      setSuccess(true);
+      
+      // Smoothly push back into the login screen after a brief success notice pause
+      setTimeout(() => {
+        if (onNavigate) onNavigate('/login');
+      }, 2000);
+    } catch (err) {
+      setError(err.message || "An account authorization pipeline conflict happened.");
     }
   };
 
   return (
-    <div className="min-h-screen bg-kabarak-slate-bg flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans antialiased">
       
-      {/* INSTITUTIONAL BRAND LOGO WRAPPER */}
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <div className="mx-auto h-16 w-16 bg-white rounded-2xl shadow-md border border-kabarak-slate-border flex items-center justify-center text-kabarak-purple">
-          <ShieldCheck className="h-10 w-10 text-kabarak-teal" />
+      {/* BRAND HEADER SECTION */}
+      <div className="sm:mx-auto w-full max-w-md">
+        <div className="flex justify-center items-center gap-3">
+          <div className="p-2 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-400">
+            <ShieldCheck className="h-10 w-10" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black text-white uppercase tracking-wide leading-none">Kabarak Univ</h2>
+            <p className="text-xs font-mono font-bold text-slate-400 uppercase tracking-widest mt-1">Digital Clearance</p>
+          </div>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-kabarak-slate-text tracking-tight">
-          Applicant Provision Station
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600 font-medium">
-          Create an official clearance profile link below
-        </p>
       </div>
 
-      {/* REGISTRATION CORE CONTROLLER CARD */}
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow-xl rounded-xl border border-kabarak-slate-border sm:px-10">
+      {/* CORE INTERACTION PROFILE CONTAINER CARD */}
+      <div className="mt-8 sm:mx-auto w-full max-w-md px-4 sm:px-0">
+        <div className="bg-white py-8 px-6 shadow-2xl rounded-2xl border border-slate-200/50 space-y-5">
           
-          {/* STATE HANDLING ALERT DIALOGUE INJECTIONS */}
-          {errorMessage && (
-            <div className="mb-6 rounded-lg bg-red-50 border border-red-200 p-4 flex items-start gap-3 text-sm text-red-700 animate-shake">
-              <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold">Registration Halted:</span> {errorMessage}
-              </div>
+          <div className="text-center space-y-1">
+            <h3 className="text-lg font-black text-slate-900">Create Account Profile</h3>
+            <p className="text-xs font-medium text-slate-400">Register credentials for sandbox system tracking</p>
+          </div>
+
+          {/* DYNAMIC FEEDBACK ALERTS */}
+          {error && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+              <p className="text-xs font-bold text-rose-800 leading-tight">{error}</p>
             </div>
           )}
 
-          {successMessage && (
-            <div className="mb-6 rounded-lg bg-teal-50 border border-teal-200 p-4 flex items-start gap-3 text-sm text-teal-800">
-              <CheckCircle2 className="h-5 w-5 text-kabarak-teal-light shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold">Account Created:</span> {successMessage}
-              </div>
+          {success && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+              <p className="text-xs font-bold text-emerald-800 leading-tight">Account successfully registered! Redirecting...</p>
             </div>
           )}
 
-          <form className="space-y-5" onSubmit={handleFormSubmit}>
+          <form onSubmit={handleRegisterSubmit} className="space-y-4">
             
-            {/* FULL OFFICIAL NAME FIELD */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 tracking-wide">Official Full Name</label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-4 w-4 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  disabled={isSubmitting}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-kabarak-purple focus:border-kabarak-purple disabled:opacity-60 transition-all"
-                  placeholder="e.g., John Doe"
-                />
-              </div>
+            {/* FULL NAME FORM LINE */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                <User className="h-3.5 w-3.5 text-slate-400" /> Full User Name
+              </label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Jane Doe"
+                className="w-full border border-slate-200 px-3 py-2.5 rounded-xl text-xs focus:border-emerald-500 outline-none text-slate-800 bg-slate-50/50"
+              />
             </div>
 
-            {/* REGISTER NUMBER / STAFF ID FIELD */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 tracking-wide">Student Admission Number</label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <CreditCard className="h-4 w-4 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  required
-                  value={idNumber}
-                  onChange={(e) => setIdNumber(e.target.value)}
-                  disabled={isSubmitting}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-kabarak-purple focus:border-kabarak-purple disabled:opacity-60 transition-all"
-                  placeholder="e.g., CS/M/1234/09/22"
-                />
-              </div>
+            {/* SECURE EMAIL CHANNEL */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5 text-slate-400" /> Security Email Address
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="username@kabarak.ac.ke"
+                className="w-full border border-slate-200 px-3 py-2.5 rounded-xl text-xs font-mono focus:border-emerald-500 outline-none text-slate-800 bg-slate-50/50"
+              />
             </div>
 
-            {/* EMAIL ADRESS FIELD */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 tracking-wide">University Email Address</label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-4 w-4 text-gray-400" />
-                </div>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isSubmitting}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-kabarak-purple focus:border-kabarak-purple disabled:opacity-60 transition-all"
-                  placeholder="username@kabarak.ac.ke"
-                />
-              </div>
+            {/* PASSWORD ENTRY FIELD */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                <Lock className="h-3.5 w-3.5 text-slate-400" /> Create Access Password
+              </label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••••••"
+                className="w-full border border-slate-200 px-3 py-2.5 rounded-xl text-xs font-mono focus:border-emerald-500 outline-none text-slate-800 bg-slate-50/50"
+              />
             </div>
 
-            {/* PASSWORD SECURITY BOXES */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 tracking-wide">Password</label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={isSubmitting}
-                    className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-kabarak-purple focus:border-kabarak-purple disabled:opacity-60 transition-all"
-                    placeholder="••••••••"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 tracking-wide">Confirm Password</label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <input
-                    type="password"
-                    required
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    disabled={isSubmitting}
-                    className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-kabarak-purple focus:border-kabarak-purple disabled:opacity-60 transition-all"
-                    placeholder="••••••••"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* TRANSACTION ACTION TERMINAL TRACKER RUNNER BOX */}
-            <div className="pt-2">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-kabarak-teal hover:bg-kabarak-teal-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-kabarak-teal disabled:opacity-50 transition-colors cursor-pointer"
+            {/* ROLE PROFILE dropdown */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">
+                System Profile Authorization Role
+              </label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="w-full border border-slate-200 px-3 py-2.5 rounded-xl text-xs focus:border-emerald-500 outline-none text-slate-700 bg-slate-50/50 font-bold"
               >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Compiling Profile Cryptography...
-                  </>
-                ) : (
-                  'Submit Registration Log'
-                )}
-              </button>
+                <option value="STUDENT">STUDENT SUBMITTER</option>
+                <option value="OFFICER">DEPARTMENT SIGNATORY OFFICER</option>
+              </select>
             </div>
+
+            {/* CONDITIONAL COMPONENT: RENDERS REGISTRATION BOX ONLY FOR STUDENT USERS */}
+            {role === 'STUDENT' && (
+              <div className="space-y-1 animate-fade-in">
+                <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                  <BookOpen className="h-3.5 w-3.5 text-slate-400" /> Institutional Registration Code
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={regNumber}
+                  onChange={(e) => setRegNumber(e.target.value)}
+                  placeholder="e.g. COMP/M/1234/05/24"
+                  className="w-full border border-slate-200 px-3 py-2.5 rounded-xl text-xs font-mono focus:border-emerald-500 outline-none text-slate-800 bg-slate-50/50"
+                />
+              </div>
+                )}
+
+            {/* REGISTRATION EXECUTION ACTION BUTTON */}
+            <button
+              type="submit"
+              className="w-full flex justify-center items-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wide shadow transition-all cursor-pointer mt-2"
+            >
+              Commit System Account Profile
+            </button>
           </form>
 
-          {/* VIEW SWITCH BAR CHANNELS */}
-          <div className="mt-6 border-t border-kabarak-slate-border pt-6 text-center">
-            <p className="text-sm text-gray-600">
-              Already possess an tracking profile?{' '}
-              <Link 
-                to="/login" 
-                className="font-semibold text-kabarak-purple hover:text-kabarak-purple-light transition-colors"
-              >
-                Sign In Securely
-              </Link>
-            </p>
+          {/* BACKLINK ANCHOR LINE */}
+          <div className="pt-4 border-t border-slate-100 text-center">
+            <button
+              type="button"
+              onClick={() => onNavigate('/login')}
+              className="text-xs font-bold text-slate-500 hover:text-slate-700 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Already have an account? Sign In
+            </button>
           </div>
 
         </div>
       </div>
-
     </div>
   );
 };

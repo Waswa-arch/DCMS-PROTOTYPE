@@ -1,155 +1,141 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext.jsx';
-import { ShieldCheck, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { ShieldCheck, Mail, Lock, AlertTriangle, ArrowRight, UserPlus } from 'lucide-react';
 
-/**
- * INSTITUTIONAL SECURE GATEWAY WORKSPACE:
- * Collects verified credentials, runs cryptographic web verification, 
- * handles state updates, and triggers contextual role-based routing.
- */
-const Login = () => {
+const Login = ({ onNavigate }) => {
   const { login } = useAuth();
-  const navigate = useNavigate();
-
+  
+  // --- FORM STATE INPUT FIELDS ---
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState(null);
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
+  // --- SUBMISSION REACTION PROCESSOR ---
   const handleFormSubmit = async (e) => {
-    e.preventDefault();
-    setErrorMessage(null);
-    setIsSubmitting(true);
+    e.preventDefault(); // Blocks browser redirection freezes
+    setError(null);
+    setIsLoading(true);
 
-    const loginAttempt = await login(email, password);
+    if (!email.trim() || !password.trim()) {
+      setError("Please fill out all credential authentication fields.");
+      setIsLoading(false);
+      return;
+    }
 
-    if (loginAttempt.success) {
-      // Dynamic routing handshake based on the verified institutional role
-      if (loginAttempt.role === 'STUDENT') {
-        navigate('/student/dashboard');
-      } else if (loginAttempt.role === 'OFFICER') {
-        navigate('/officer/dashboard');
-      } else if (loginAttempt.role === 'ADMIN') {
-        navigate('/admin/dashboard');
-      } else {
-        setErrorMessage('Platform Error: Assigned profile role mapping is invalid.');
-        setIsSubmitting(false);
+    try {
+      // 🔐 Fires credential lookups against the local database context
+      await login(email.trim(), password);
+      
+      // FIX 1: Uses dynamic state pipeline navigation rather than forcing browser location reloads
+      if (onNavigate) {
+        onNavigate('/dashboard');
       }
-    } else {
-      setErrorMessage(loginAttempt.message);
-      setIsSubmitting(false);
+    } catch (err) {
+      console.error("Login verification hook exception caught: ", err);
+      setError(err.message || "Invalid system email mapping or incorrect password.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-kabarak-slate-bg flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans antialiased">
       
-      {/* BRAND BRANDING CONTAINER */}
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <div className="mx-auto h-16 w-16 bg-white rounded-2xl shadow-md border border-kabarak-slate-border flex items-center justify-center text-kabarak-purple">
-          <ShieldCheck className="h-10 w-10 text-kabarak-teal" />
+      <div className="sm:mx-auto w-full max-w-md">
+        <div className="flex justify-center items-center gap-3">
+          <div className="p-2 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-400">
+            <ShieldCheck className="h-10 w-10" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black text-white uppercase tracking-wide leading-none">Kabarak Univ</h2>
+            <p className="text-xs font-mono font-bold text-slate-400 uppercase tracking-widest mt-1">Digital Clearance</p>
+          </div>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-kabarak-slate-text tracking-tight">
-          Kabarak University
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600 font-medium">
-          Digital Clearance Management System (DCMS)
-        </p>
       </div>
 
-      {/* CORE INPUT PANEL CARD */}
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow-xl rounded-xl border border-kabarak-slate-border sm:px-10">
+      <div className="mt-8 sm:mx-auto w-full max-w-md px-4 sm:px-0">
+        <div className="bg-white py-8 px-6 shadow-2xl rounded-2xl border border-slate-200/50 space-y-6">
           
-          {/* SYSTEM ERROR NOTIFICATION BOX */}
-          {errorMessage && (
-            <div className="mb-6 rounded-lg bg-red-50 border border-red-200 p-4 flex items-start gap-3 text-sm text-red-700 animate-shake">
-              <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold">Authentication Refused:</span> {errorMessage}
-              </div>
+          <div className="text-center space-y-1">
+            <h3 className="text-lg font-black text-slate-900">Sign In to Session</h3>
+            <p className="text-xs font-medium text-slate-400">Access your clearance tracking records ledger</p>
+          </div>
+
+          {/* ERROR RENDER MESSAGE PANEL */}
+          {error && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+              <p className="text-xs font-bold text-rose-800 leading-tight">{error}</p>
             </div>
           )}
 
-          <form className="space-y-6" onSubmit={handleFormSubmit}>
-            {/* EMAIL PARAMETER FIELD */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 tracking-wide">
-                Institutional Email Address
+          <form onSubmit={handleFormSubmit} className="space-y-4">
+            
+            {/* EMAIL SOURCE CHANNEL */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5 text-slate-400" /> Account Security Email
               </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-4 w-4 text-gray-400" />
-                </div>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isSubmitting}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-kabarak-purple focus:border-kabarak-purple disabled:opacity-60 transition-all"
-                  placeholder="username@kabarak.ac.ke"
-                />
-              </div>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="username@kabarak.ac.ke"
+                className="w-full border border-slate-200 px-3 py-2.5 rounded-xl text-xs font-mono focus:border-emerald-500 outline-none text-slate-800 bg-slate-50/50"
+              />
             </div>
 
-            {/* PASSWORD PARAMETER FIELD */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 tracking-wide">
-                Access Password
+            {/* PASSWORD SECURITY CHANNEL */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                <Lock className="h-3.5 w-3.5 text-slate-400" /> Access Password
               </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-4 w-4 text-gray-400" />
-                </div>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isSubmitting}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-kabarak-purple focus:border-kabarak-purple disabled:opacity-60 transition-all"
-                  placeholder="••••••••"
-                />
-              </div>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••••••"
+                className="w-full border border-slate-200 px-3 py-2.5 rounded-xl text-xs font-mono focus:border-emerald-500 outline-none text-slate-800 bg-slate-50/50"
+              />
             </div>
 
-            {/* INTERACTIVE FORM DESPATCH RUNNER BUTTON */}
-            <div>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-kabarak-purple hover:bg-kabarak-purple-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-kabarak-purple disabled:opacity-50 transition-colors cursor-pointer"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Verifying Identity Vault...
-                  </>
-                ) : (
-                  'Authorize Secure Login'
-                )}
-              </button>
-            </div>
+            {/* CORE EXECUTIVE SUBMIT BUTTON */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full flex justify-center items-center gap-2 px-4 py-3 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white rounded-xl text-xs font-black uppercase tracking-wide shadow transitions-all cursor-pointer"
+            >
+              {isLoading ? 'Verifying Tokens...' : 'Authenticate Sign In'}
+              {!isLoading && <ArrowRight className="h-4 w-4" />}
+            </button>
           </form>
 
-          {/* INTER-VIEW ALTERATION FOOTNOTE LINKS */}
-          <div className="mt-6 border-t border-kabarak-slate-border pt-6 text-center">
-            <p className="text-sm text-gray-600">
-              New graduating student applicant?{' '}
-              <Link 
-                to="/register" 
-                className="font-semibold text-kabarak-teal hover:text-kabarak-teal-dark transition-colors"
-              >
-                Create Account Profile
-              </Link>
+          {/* FIX 2: INTERACTIVE REGISTER LINK DESK */}
+          <div className="pt-4 border-t border-slate-100 text-center">
+            <button
+              type="button"
+              onClick={() => onNavigate('/register')}
+              className="text-xs font-bold text-emerald-600 hover:text-emerald-700 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+            >
+              <UserPlus className="h-4 w-4" /> Don't have an account? Register Profile
+            </button>
+          </div>
+
+          {/* SANDBOX BACKDOOR HINT DETAILS */}
+          <div className="bg-slate-50 rounded-xl p-3 border border-slate-150 text-[11px] space-y-1">
+            <span className="font-black text-slate-500 uppercase tracking-wider block">Sandbox System Accounts:</span>
+            <p className="text-slate-600 font-medium">
+              💡 Out-of-the-box Officer Profile Sign-In Details: <br />
+              Email: <span className="font-mono font-bold text-teal-700">officer@kabarak.ac.ke</span> <br />
+              Password: <span className="font-mono font-bold text-teal-700">officer123</span>
             </p>
           </div>
 
         </div>
       </div>
-
     </div>
   );
 };

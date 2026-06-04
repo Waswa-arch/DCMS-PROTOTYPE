@@ -1,32 +1,43 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './views/Login.jsx';
-import Register from './views/Register.jsx';
-import ProtectedRoute from './components/ProtectedRoute.jsx';
-import DashboardLayout from './components/DashboardLayout.jsx';
+import React, { useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import Login from './views/Login';
+import Register from './views/Register';
+import DashboardLayout from './components/DashboardLayout';
+
+const MainApplicationRoutingGate = () => {
+  const { user } = useAuth();
+  const [currentUrlPath, setCurrentUrlPath] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const syncLocationRoute = () => setCurrentUrlPath(window.location.pathname);
+    window.addEventListener('popstate', syncLocationRoute);
+    return () => window.removeEventListener('popstate', syncLocationRoute);
+  }, []);
+
+  const navigateToPage = (targetPath) => {
+    window.history.pushState({}, '', targetPath);
+    setCurrentUrlPath(targetPath);
+  };
+
+  // 1️⃣ PRIORITIZE EXPLICIT PATH MATCHING FIRST (Fixes the Officer Dashboard hijacking)
+  if (currentUrlPath === '/register' || currentUrlPath === '/signup') {
+    return <Register onNavigate={navigateToPage} />;
+  }
+
+  // 2️⃣ IF NO USER SESSION EXISTS, FORCE THE LOGIN SCREEN
+  if (!user) {
+    return <Login onNavigate={navigateToPage} />;
+  }
+
+  // 3️⃣ DEFAULT FALLBACK FOR AUTHENTICATED USERS
+  return <DashboardLayout onNavigate={navigateToPage} />;
+};
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        {/* Public Access Hubs */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-
-        {/* Protected Institutional Operations Routing Frame */}
-        <Route 
-          path="/dashboard" 
-          element={
-            <ProtectedRoute>
-              <DashboardLayout />
-            </ProtectedRoute>
-          } 
-        />
-
-        {/* Catch-all Fallback Gateway */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <MainApplicationRoutingGate />
+    </AuthProvider>
   );
 }
 
