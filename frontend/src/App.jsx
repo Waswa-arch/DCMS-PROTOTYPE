@@ -19,6 +19,19 @@ const MainApplicationRoutingGate = () => {
     setCurrentUrlPath(targetPath);
   };
 
+  // 🔄 AUTOMATIC AUTH-STATE REDIRECT OBSERVER (Fixes the non-redirection issue safely)
+  useEffect(() => {
+    // Case A: User has successfully authenticated but is still stuck on an authentication route
+    if (user && (currentUrlPath === '/login' || currentUrlPath === '/register' || currentUrlPath === '/signup' || currentUrlPath === '/')) {
+      navigateToPage('/dashboard');
+    }
+    
+    // Case B: No user session exists, but they are trying to access a protected internal route
+    if (!user && currentUrlPath !== '/register' && currentUrlPath !== '/signup' && currentUrlPath !== '/login') {
+      navigateToPage('/login');
+    }
+  }, [user, currentUrlPath]);
+
   // 1️⃣ PRIORITIZE EXPLICIT PATH MATCHING FIRST (Fixes the Officer Dashboard hijacking)
   if (currentUrlPath === '/register' || currentUrlPath === '/signup') {
     return <Register onNavigate={navigateToPage} />;

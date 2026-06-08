@@ -43,6 +43,20 @@ export const AuthProvider = ({ children }) => {
     }
   });
 
+  // ✨ NEW FEATURE ADDITION: Persistent clearance status records engine with dynamic reasons
+  const [clearanceRecords, setClearanceRecords] = useState(() => {
+    try {
+      const savedRecords = localStorage.getItem('system_clearance_db');
+      return savedRecords ? JSON.parse(savedRecords) : [
+        // Seed default records for sandbox testing environments
+        { studentEmail: 'student@kabarak.ac.ke', department: 'University Library', status: 'PENDING', flagReason: '' }
+      ];
+    } catch (error) {
+      console.warn("Corrupted clearance ledger detected. Initializing clean registry...");
+      return [];
+    }
+  });
+
   useEffect(() => {
     try {
       localStorage.setItem('system_users_db', JSON.stringify(registeredUsers));
@@ -51,18 +65,32 @@ export const AuthProvider = ({ children }) => {
     }
   }, [registeredUsers]);
 
-  // Handle new registrations smoothly
-  const register = (name, email, password, role, regNumber = '') => {
+  // ✨ NEW FEATURE ADDITION: Write clearance modifications automatically to browser storage
+  useEffect(() => {
+    try {
+      localStorage.setItem('system_clearance_db', JSON.stringify(clearanceRecords));
+    } catch (e) {
+      console.error("Failed to write to system clearance tracking ledger database line", e);
+    }
+  }, [clearanceRecords]);
+
+  // Handle new registrations smoothly by accepting a destructured configuration object
+  const register = ({ firstName, lastName, email, password, role, regNumber = '', department = '' }) => {
+    if (!email) throw new Error("Email identity record is required.");
+
     const userExists = registeredUsers.some(u => u.email.toLowerCase() === email.toLowerCase());
     if (userExists) throw new Error("Account with this email already exists within the registrar index.");
 
+    // Standardize 'Clearance Officer' string to match your system-wide 'OFFICER' role identifier
+    const normalizedRole = role === 'Clearance Officer' ? 'OFFICER' : role;
+
     const newUser = { 
-      name, 
+      name: `${firstName} ${lastName}`.trim(), 
       email: email.trim(), 
       password, 
-      role, 
-      regNumber: role === 'OFFICER' ? '' : regNumber, 
-      department: role === 'OFFICER' ? 'University Library' : null 
+      role: normalizedRole, 
+      regNumber: normalizedRole === 'OFFICER' ? '' : regNumber, 
+      department: department || (normalizedRole === 'OFFICER' ? 'University Library' : null) 
     };
     
     setRegisteredUsers(prev => [...prev, newUser]);
@@ -83,6 +111,27 @@ export const AuthProvider = ({ children }) => {
     return foundUser;
   };
 
+  // ✨ NEW FEATURE ADDITION: Universal state modifier function for officer holds
+  const updateClearanceStatus = (studentEmail, departmentName, newStatus, reason = '') => {
+    setClearanceRecords(prevRecords => {
+      const matchExists = prevRecords.some(
+        rec => rec.studentEmail.toLowerCase() === studentEmail.toLowerCase() && rec.department === departmentName
+      );
+
+      if (matchExists) {
+        return prevRecords.map(rec => {
+          if (rec.studentEmail.toLowerCase() === studentEmail.toLowerCase() && rec.department === departmentName) {
+            return { ...rec, status: newStatus, flagReason: reason };
+          }
+          return rec;
+        });
+      } else {
+        // Fallback safety insertion if a historical record row doesn't exist yet
+        return [...prevRecords, { studentEmail: studentEmail.trim(), department: departmentName, status: newStatus, flagReason: reason }];
+      }
+    });
+  };
+
   const logout = () => {
     setUser(null);
     localStorage.removeItem('active_clearance_session');
@@ -90,7 +139,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout }}>
+    <AuthContext.Provider value={{ user, login, register, logout, clearanceRecords, updateClearanceStatus }}>
       {children}
     </AuthContext.Provider>
   );
