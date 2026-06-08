@@ -29,7 +29,6 @@ export const AuthProvider = ({ children }) => {
       const savedUsers = localStorage.getItem('system_users_db');
       if (savedUsers) {
         const parsed = JSON.parse(savedUsers);
-        // Ensure the default testing officer is always present
         if (!parsed.some(u => u.email === defaultOfficer.email)) {
           parsed.push(defaultOfficer);
         }
@@ -43,7 +42,7 @@ export const AuthProvider = ({ children }) => {
     }
   });
 
-  // ✨ NEW FEATURE ADDITION: Persistent clearance status records engine with dynamic reasons
+  // 🛡️ Persistent clearance status records engine with dynamic database initializations
   const [clearanceRecords, setClearanceRecords] = useState(() => {
     try {
       const savedRecords = localStorage.getItem('system_clearance_db');
@@ -65,7 +64,6 @@ export const AuthProvider = ({ children }) => {
     }
   }, [registeredUsers]);
 
-  // ✨ NEW FEATURE ADDITION: Write clearance modifications automatically to browser storage
   useEffect(() => {
     try {
       localStorage.setItem('system_clearance_db', JSON.stringify(clearanceRecords));
@@ -74,30 +72,52 @@ export const AuthProvider = ({ children }) => {
     }
   }, [clearanceRecords]);
 
-  // Handle new registrations smoothly by accepting a destructured configuration object
+  // Handle new registrations and automatically seed a clean clearance profile mapping line
   const register = ({ firstName, lastName, email, password, role, regNumber = '', department = '' }) => {
     if (!email) throw new Error("Email identity record is required.");
 
     const userExists = registeredUsers.some(u => u.email.toLowerCase() === email.toLowerCase());
     if (userExists) throw new Error("Account with this email already exists within the registrar index.");
 
-    // Standardize 'Clearance Officer' string to match your system-wide 'OFFICER' role identifier
     const normalizedRole = role === 'Clearance Officer' ? 'OFFICER' : role;
+    const studentEmailClean = email.trim().toLowerCase();
 
     const newUser = { 
       name: `${firstName} ${lastName}`.trim(), 
-      email: email.trim(), 
+      email: studentEmailClean, 
       password, 
       role: normalizedRole, 
       regNumber: normalizedRole === 'OFFICER' ? '' : regNumber, 
       department: department || (normalizedRole === 'OFFICER' ? 'University Library' : null) 
     };
     
+    // 1. Core Profile persistence allocation
     setRegisteredUsers(prev => [...prev, newUser]);
+
+    // 2. Automatically generate clean PENDING tracking rows across all clearance node gates
+    if (normalizedRole === 'Student') {
+      const requiredDepartments = [
+        'University Library',
+        'Finance & Accounts',
+        'Hostel & Residence Dept',
+        'Academic Affairs',
+        'ICT Infrastructure',
+        'Sports & Athletics'
+      ];
+
+      const cleanStudentProfile = requiredDepartments.map(dept => ({
+        studentEmail: studentEmailClean,
+        department: dept,
+        status: 'PENDING',
+        flagReason: ''
+      }));
+
+      setClearanceRecords(prev => [...prev, ...cleanStudentProfile]);
+    }
+
     return true;
   };
 
-  // Login processing checking actual registered passwords
   const login = (email, password) => {
     const cleanEmail = email.trim().toLowerCase();
     const foundUser = registeredUsers.find(u => u.email.toLowerCase() === cleanEmail && u.password === password);
@@ -111,7 +131,6 @@ export const AuthProvider = ({ children }) => {
     return foundUser;
   };
 
-  // ✨ NEW FEATURE ADDITION: Universal state modifier function for officer holds
   const updateClearanceStatus = (studentEmail, departmentName, newStatus, reason = '') => {
     setClearanceRecords(prevRecords => {
       const matchExists = prevRecords.some(
@@ -126,7 +145,6 @@ export const AuthProvider = ({ children }) => {
           return rec;
         });
       } else {
-        // Fallback safety insertion if a historical record row doesn't exist yet
         return [...prevRecords, { studentEmail: studentEmail.trim(), department: departmentName, status: newStatus, flagReason: reason }];
       }
     });

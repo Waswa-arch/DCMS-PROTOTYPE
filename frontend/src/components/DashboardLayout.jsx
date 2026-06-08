@@ -21,7 +21,7 @@ const DashboardLayout = () => {
   // Dynamic officer department desk simulator switch
   const [simulatedOfficerDept, setSimulatedOfficerDept] = useState(user?.department || 'University Library');
 
-  // Unified shared data storage layer (cleared of all static mock names)
+  // Unified shared data storage layer
   const [masterClearanceRecords, setMasterClearanceRecords] = useState(() => {
     const saved = localStorage.getItem('global_clearance_ledger');
     return saved ? JSON.parse(saved) : [];
@@ -37,25 +37,26 @@ const DashboardLayout = () => {
   };
 
   // --- COMPUTE LOGGED IN STUDENT DATA STRINGS ---
-  // Isolate current records linked specifically to whoever is logged in right now
   const studentTasks = masterClearanceRecords.filter(r => r.studentEmail === user?.email);
   const isInitiated = studentTasks.length > 0;
   
   const approvedCount = studentTasks.filter(t => t.status === 'Approved').length;
-  const progressPercentage = studentTasks.length > 0 ? Math.round((approvedCount / studentTasks.length) * 100) : 0;
-  const isEligibleForCertificate = studentTasks.length > 0 && progressPercentage === 100;
+  const progressPercentage = studentTasks.length > 0 && approvedCount > 0 
+    ? Math.round((approvedCount / studentTasks.length) * 100) 
+    : 0;
 
   // --- DYNAMICALLY GENERATE STUDENT PROFILE TRACKS ---
   const handleApproveClearanceInitiation = () => {
     if (!user) return;
 
+    // Fixed: All nodes now correctly start as 'Pending' with neutral tracking descriptions
     const validationNodes = [
-      { dept: 'University Library', official: 'Dr. C. Cheruiyot', notes: 'Asset liability: 1 unreturned library asset item flagged.', initialStatus: 'Flagged' },
+      { dept: 'University Library', official: 'Dr. C. Cheruiyot', notes: 'No unreturned library asset liabilities discovered. Pending sign-off validation.', initialStatus: 'Pending' },
       { dept: 'Finance & Accounts', official: 'Finance Registrar Office', notes: 'Reviewing current semester registration ledger balances.', initialStatus: 'Pending' },
       { dept: 'Hostel & Residence Dept', official: 'Housekeeping Coordinator', notes: 'Awaiting room key submission validation inventory.', initialStatus: 'Pending' },
-      { dept: 'Academic Affairs', official: 'Registry Exam Section', notes: 'Dossier evaluation locked pending external system logs.', initialStatus: 'Locked' },
-      { dept: 'ICT Infrastructure', official: 'Automated Core Gate', notes: 'Structural pipeline check evaluation opens dynamically.', initialStatus: 'Locked' },
-      { dept: 'Sports & Athletics', official: 'Sports Office Coordinator', notes: 'Structural pipeline check evaluation opens dynamically.', initialStatus: 'Locked' }
+      { dept: 'Academic Affairs', official: 'Registry Exam Section', notes: 'Dossier evaluation locked pending final semester marks integration.', initialStatus: 'Pending' },
+      { dept: 'ICT Infrastructure', official: 'Automated Core Gate', notes: 'Structural pipeline network profile evaluation pending.', initialStatus: 'Pending' },
+      { dept: 'Sports & Athletics', official: 'Sports Office Coordinator', notes: 'Awaiting athletic equipment return audit evaluation.', initialStatus: 'Pending' }
     ];
 
     const personalizedTracks = validationNodes.map((node, index) => ({
@@ -154,7 +155,7 @@ const DashboardLayout = () => {
 
         <div className="p-4 border-t border-slate-800 bg-slate-950/40 space-y-3">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-slate-800 flex items-center justify-center text-emerald-400 font-black">{user.name.charAt(0)}</div>
+            <div className="h-9 w-9 rounded-xl bg-slate-800 flex items-center justify-center text-emerald-400 font-black">{user.name ? user.name.charAt(0) : 'U'}</div>
             <div className="overflow-hidden">
               <h4 className="text-xs font-bold truncate text-white">{user.name}</h4>
               <p className="text-[10px] font-mono text-slate-400 truncate">{user.role}</p>
@@ -223,13 +224,13 @@ const DashboardLayout = () => {
                           <div className="space-y-2">
                             <div className="flex justify-between items-start gap-2">
                               <h4 className="font-black text-sm text-slate-900">{task.department}</h4>
-                              <span className={`px-2 py-0.5 text-[9px] font-black rounded border uppercase ${task.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{task.status}</span>
+                              <span className={`px-2 py-0.5 text-[9px] font-black rounded border uppercase ${task.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : task.status === 'Flagged' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{task.status}</span>
                             </div>
                             <p className="text-xs text-slate-500 font-medium">{task.notes}</p>
                           </div>
                           <div className="pt-4 border-t border-slate-100 mt-4 flex items-center justify-between text-[10px] text-slate-400 font-bold">
                             <span>Auth: <span className="font-mono text-slate-600">{task.official}</span></span>
-                            {task.status === 'Flagged' && <span className="text-rose-600">Click to Resolve →</span>}
+                            {task.status === 'Flagged' && <span className="text-rose-600 font-extrabold">Click to Resolve →</span>}
                           </div>
                         </div>
                       ))}
@@ -266,7 +267,6 @@ const DashboardLayout = () => {
                     </p>
                   </div>
 
-                  {/* 🧪 TESTING UTILITY: EASILY CYCLE TO TEST REAL REFLECTIONS IN ALL DEPTS */}
                   <div className="bg-slate-900 text-white rounded-xl p-3 flex items-center gap-3">
                     <span className="text-[10px] font-black text-slate-400 uppercase">Simulate Desk View:</span>
                     <select className="bg-slate-800 border border-slate-700 rounded text-xs font-bold p-1 text-teal-400 outline-none" value={simulatedOfficerDept} onChange={(e) => setSimulatedOfficerDept(e.target.value)}>
@@ -302,7 +302,7 @@ const DashboardLayout = () => {
                             <td className="p-4 font-mono text-slate-500">{task.regNumber}</td>
                             <td className="p-4 text-slate-600 font-medium">{task.notes}</td>
                             <td className="p-4">
-                              <span className={`px-2 py-0.5 text-[9px] font-black rounded border uppercase ${task.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{task.status}</span>
+                              <span className={`px-2 py-0.5 text-[9px] font-black rounded border uppercase ${task.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : task.status === 'Flagged' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{task.status}</span>
                             </td>
                             <td className="p-4 text-right space-x-2 whitespace-nowrap">
                               <button onClick={() => {
@@ -357,7 +357,7 @@ const DashboardLayout = () => {
           🎯 SYSTEM INTERACTIVE SUBMISSION DIALOG 
          ========================================== */}
       {selectedDisputeDept && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
             <div className="p-5 bg-rose-900 text-white flex justify-between items-center">
               <h3 className="font-black text-sm tracking-wide uppercase">File Resolution Matrix</h3>
