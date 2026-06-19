@@ -2,7 +2,7 @@
  * ROLE-BASED ACCESS CONTROL (RBAC) POLICY ENFORCER:
  * Restricts traversal through administrative routers by cross-matching 
  * the verified user request token role property against explicitly allowed system permissions.
- * * @param {string[]} allowedRoles - Array of valid role strings allowed to proceed (e.g. ['ADMIN', 'OFFICER'])
+ * @param {string[]} allowedRoles - Array of valid role strings allowed to proceed (e.g. ['ADMIN', 'OFFICER'])
  */
 const roleGuard = (allowedRoles) => {
   return (req, res, next) => {
@@ -26,4 +26,4 @@ const roleGuard = (allowedRoles) => {
   };
 };
 
-module.exports = roleGuard;
+export default roleGuard;

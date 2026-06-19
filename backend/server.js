@@ -2,50 +2,42 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { initDB } from './config/db.js';
+
+// 1. Import your secured ES Module routers
 import authRoutes from './routes/auth.routes.js';
-import bcrypt from 'bcryptjs';
-// Initialize configuration environment paths from .env file
+import clearanceRoutes from './routes/clearance.routes.js';
+
+// Load environment variables from .env file
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-// Enable Cross-Origin Resource Sharing (CORS) for local frontend environments
-app.use(cors());
+// 2. Global Middleware Configuration
+app.use(cors()); // CRITICAL: Allows your React frontend to make Axios network requests to this API
+app.use(express.json()); // Parses incoming JSON payloads automatically
 
-// Configure application-level middleware to parse incoming JSON payloads
-app.use(express.json());
-
-// Link the authentication system routing maps
+// 3. Mount System API Endpoint Routers
 app.use('/api/auth', authRoutes);
+app.use('/api/clearance', clearanceRoutes);
 
-// Diagnostic health-check endpoint to verify network availability
+// Fallback route for server status verification
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'ONLINE', 
-    system: 'Digital Clearance Management System Backend',
-    databaseEnforced: true,
-    timestamp: new Date()
-  });
+  res.status(200).json({ status: 'ONLINE', timestamp: new Date() });
 });
 
-// Wraps server boot to guarantee database connectivity before accepting traffic
-async function startServer() {
-  try {
-    // 1. Initialize our clean pure-javascript SQLite driver async framework
-    await initDB();
-    
-    // 2. Open up the network listener gateway
-    app.listen(PORT, () => {
-      console.log(`[Express Server] Server running in [${process.env.NODE_ENV || 'development'}] mode.`);
-      console.log(`Security Server online: Operational on port ${PORT}`);
-      console.log(`[Express Server] API listening for traffic at: http://localhost:${PORT}`);
-    });
-  } catch (error) {
-    console.error('CRITICAL FAULT: Failed to initialize server architecture:', error);
-    process.exit(1); // Kill process on critical startup error
-  }
-}
+const PORT = process.env.PORT || 5000;
 
-// Fire up the unified system engine
-startServer();
+// 4. Initialize Database Connection Pool prior to firing up the network listener
+initDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`\n==================================================`);
+    console.log(`[Server Core] DCMS Backend Operational.`);
+    console.log(`[Server Core] Mode: ES Modules (ESM)`);
+    console.log(`[Server Core] Listening securely on: http://localhost:${PORT}`);
+    console.log(`==================================================\n`);
+  });
+}).catch(err => {
+  console.error('\n[Server Core] CRITICAL BOOT ERROR: Database engine pool failure.');
+  console.error(err);
+  process.exit(1);
+});

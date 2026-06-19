@@ -2,3 +2,19 @@ node_modules/
 .vite/
 .env
 *.sqlite
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Security & Environment
+.env
+.env.local
+
+# Database Binaries
+*.sqlite
+*.sqlite3
+database.sqlite
+
+# System Overlays
+.DS_Store
+dist/

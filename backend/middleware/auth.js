@@ -1,4 +1,4 @@
-const jwt = require('jsonwebtoken');
+import jwt from 'jsonwebtoken';
 
 /**
  * INSTITUTIONAL CRYPTOGRAPHIC AUTHENTICATION GUARD:
@@ -27,16 +27,26 @@ const verifyToken = (req, res, next) => {
 
   const token = tokenParts[1];
 
+  // SECURITY FIX: Fail loudly if JWT_SECRET environment context is unconfigured
+  if (!process.env.JWT_SECRET) {
+    console.error('[CRITICAL SECURITY ERROR] JWT_SECRET environment variable is missing.');
+    return res.status(500).json({
+      error: 'SERVER_CONFIGURATION_ERROR',
+      message: 'Cryptographic sub-system is misconfigured. Contact System Administrator.'
+    });
+  }
+
   try {
     // Validate signature authenticity against the unique system runtime secret
     const decodedPayload = jwt.verify(token, process.env.JWT_SECRET);
     
     // Bind parsed claims directly into Express request context scope
+    // HARMONIZATION FIX: standardizing on id_number to match backend database layout
     req.user = {
       id: decodedPayload.id,
       email: decodedPayload.email,
       role: decodedPayload.role,
-      idNumber: decodedPayload.idNumber
+      id_number: decodedPayload.id_number || decodedPayload.idNumber
     };
 
     next(); // Pass control down to the next functional route controller node
@@ -49,4 +59,4 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-module.exports = verifyToken;
+export default verifyToken;
