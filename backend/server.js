@@ -1,43 +1,30 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import { initDB } from './config/db.js';
+import app from './src/app.js';
+import { env } from './src/config/env.js';
+import { db } from './src/config/db.js';
+import { runMigrations } from './src/database/migrate.js';
+import { runSeeds } from './src/database/seed.js';
 
-// 1. Import your secured ES Module routers
-import authRoutes from './routes/auth.routes.js';
-import clearanceRoutes from './routes/clearance.routes.js';
+async function bootServer() {
+  try {
+    console.log('🚀 [System Boot] Initializing Digital Clearance Management System Lifecycle...');
 
-// Load environment variables from .env file
-dotenv.config();
+    // 1. Fire foundational database table compile routines
+    await runMigrations();
 
-const app = express();
+    // 2. Hydrate core systemic constraints and static data
+    await runSeeds();
 
-// 2. Global Middleware Configuration
-app.use(cors()); // CRITICAL: Allows your React frontend to make Axios network requests to this API
-app.use(express.json()); // Parses incoming JSON payloads automatically
+    // 3. Unshackle the network socket listener loop
+    app.listen(env.port, () => {
+      console.log('\x1b[36m%s\x1b[0m', `✨ [System Boot] Production engine running smoothly on http://localhost:${env.port}`);
+    });
 
-// 3. Mount System API Endpoint Routers
-app.use('/api/auth', authRoutes);
-app.use('/api/clearance', clearanceRoutes);
+  } catch (criticalFailure) {
+    console.error('\x1b[31m%s\x1b[0m', '💥 [System Boot] Critical Engine Startup Core Fault:');
+    console.error(criticalFailure);
+    process.exit(1);
+  }
+}
 
-// Fallback route for server status verification
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ONLINE', timestamp: new Date() });
-});
-
-const PORT = process.env.PORT || 5000;
-
-// 4. Initialize Database Connection Pool prior to firing up the network listener
-initDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`\n==================================================`);
-    console.log(`[Server Core] DCMS Backend Operational.`);
-    console.log(`[Server Core] Mode: ES Modules (ESM)`);
-    console.log(`[Server Core] Listening securely on: http://localhost:${PORT}`);
-    console.log(`==================================================\n`);
-  });
-}).catch(err => {
-  console.error('\n[Server Core] CRITICAL BOOT ERROR: Database engine pool failure.');
-  console.error(err);
-  process.exit(1);
-});
+// Execute the bootstrap sequence
+bootServer();

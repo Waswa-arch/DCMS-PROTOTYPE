@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // 🆕 Connected to standard router engine
 import { useAuth } from '../context/AuthContext';
 
-export function Login({ onNavigate }) {
+export function Login() {
   const { login } = useAuth();
+  const navigate = useNavigate(); // 🆕 Initialized navigation tool
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,10 +24,8 @@ export function Login({ onNavigate }) {
       setLoading(true);
       await login(email, password);
       
-      // Forces the browser path state to update instantly, changing the layout layout.
-      if (onNavigate) {
-        onNavigate('/dashboard');
-      }
+      // 🔄 Automatically drives path state and unlocks layout canvases safely
+      navigate('/dashboard');
     } catch (err) {
       setError(err.message || 'Invalid credentials.');
     } finally {
@@ -105,7 +105,7 @@ export function Login({ onNavigate }) {
           <div className="auth-card">
             <div className="tab-bar">
               <div className="tab active">Sign in</div>
-              <div className="tab" onClick={() => onNavigate && onNavigate('/register')}>Register</div>
+              <div className="tab" onClick={() => navigate('/register')}>Register</div>
             </div>
 
             {error && <div className="error-message">{error}</div>}
@@ -134,7 +134,7 @@ export function Login({ onNavigate }) {
               </button>
               
               <div className="divider"><hr /><span>or</span><hr /></div>
-              <p className="auth-switch">No account? <a onClick={() => onNavigate && onNavigate('/register')}>Register here</a></p>
+              <p className="auth-switch">No account? <a onClick={() => navigate('/register')}>Register here</a></p>
             </form>
           </div>
         </div>

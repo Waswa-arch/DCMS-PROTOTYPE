@@ -1,30 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../utils/api'; 
 
 const AuthContext = createContext(null);
-
-// 1. CONFIGURE A CENTRALIZED AXIOS INSTANCE
-export const api = axios.create({
-  baseURL: 'http://localhost:5000',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// AUTOMATIC ROUTE GUARD INTERCEPTOR:
-// Injects the cryptographic JWT token into the Authorization header of every single outbound request
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('dcms_auth_token');
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
 
 export const AuthProvider = ({ children }) => {
   // Safe initialization for the active backend-authenticated user session
@@ -43,7 +20,7 @@ export const AuthProvider = ({ children }) => {
   // State hook to bridge real-time data streaming to your dashboard view components
   const [clearanceRecords, setClearanceRecords] = useState([]);
 
-  // AUTOMATIC SESSION SYNC INTERCEPTOR:
+  // AUTOMATIC SESSION SYNC INTERCEPTOR
   // Detects token expiration or unauthenticated server responses and forces a clean logout
   useEffect(() => {
     const interceptor = api.interceptors.response.use(
@@ -61,21 +38,32 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * IDENTITY PROVISIONING NETWORK DISPATCH
-   * Connects registration form actions directly to our live Express server backend
+   * High-fidelity mapping ensures multi-step fields (role, department) are safely preserved
    */
-  const register = async ({ firstName, lastName, email, password, regNumber = '' }) => {
+  const register = async (formData) => {
     try {
+      // 1. Resolve name variations (handles both single 'name' input or split 'firstName/lastName')
+      const resolvedName = formData.name || formData.fullName || 
+        `${formData.firstName || ''} ${formData.lastName || ''}`.trim();
+
+      // 2. Resolve registration number field variations
+      const clearRegNumber = formData.regNumber || formData.idNumber || formData.id_number || formData.studentId || '';
+
+      // 3. Assemble unified payload carrying custom form metrics (role, school, department)
       const payload = {
-        name: `${firstName} ${lastName}`.trim(),
-        email: email.trim().toLowerCase(),
-        password: password,
-        id_number: regNumber.trim() // Maps React inputs cleanly onto database columns
+        ...formData, 
+        name: resolvedName,
+        email: (formData.email || '').trim().toLowerCase(),
+        password: formData.password,
+        id_number: clearRegNumber.trim()
       };
 
-      // Dispatches request directly to the secure backend router
-      const response = await api.post('/api/auth/register', payload);
+      console.log("📡 [Auth Context] Dispatching Registration Payload:", payload);
+
+      const response = await api.post('/auth/register', payload);
       return response.data;
     } catch (error) {
+      console.error("❌ [Auth Context] Registration Endpoint Rejection:", error.response?.data);
       const errorMessage = error.response?.data?.message || "Registration gateway refused transaction.";
       throw new Error(errorMessage);
     }
@@ -83,15 +71,25 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * SECURE TOKEN HANDSHAKE DISPATCH
-   * Exchanges plaintext login credentials for signed cryptographic session keys
+   * Dual-property assignment satisfies both loose and strict identification schemas
    */
-  const login = async (email, password) => {
+  const login = async (idNumberOrEmail, password) => {
     try {
-      const response = await api.post('/api/auth/login', {
-        email: email.trim().toLowerCase(),
-        password: password,
-      });
+      const cleanedIdentifier = idNumberOrEmail.trim();
+      
+      // Build an adaptive payload to support backends reading either key
+      const payload = { 
+        id_number: cleanedIdentifier,
+        password: password 
+      };
 
+      if (cleanedIdentifier.includes('@')) {
+        payload.email = cleanedIdentifier.toLowerCase();
+      }
+
+      console.log("📡 [Auth Context] Dispatching Login Payload:", payload);
+
+      const response = await api.post('/auth/login', payload);
       const { token, user: authenticatedUser } = response.data;
 
       // Persist token and session context safely within browser memory line
@@ -101,6 +99,7 @@ export const AuthProvider = ({ children }) => {
       setUser(authenticatedUser);
       return authenticatedUser;
     } catch (error) {
+      console.error("❌ [Auth Context] Login Endpoint Rejection:", error.response?.data);
       const errorMessage = error.response?.data?.message || "Secure gateway rejected authentication mapping.";
       throw new Error(errorMessage);
     }
@@ -108,11 +107,10 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * RE-FETCH REALTIME STUDENT TRACKING STATUS MAP
-   * Queries the clearance ledger directly to replace legacy local state tables
    */
   const refreshClearanceData = async () => {
     try {
-      const response = await api.get('/api/clearance/me');
+      const response = await api.get('/clearance/me');
       if (response.data && response.data.departmental_status) {
         setClearanceRecords(response.data.departmental_status);
         return response.data;
@@ -124,11 +122,10 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * OFFICER ADMINISTRATIVE ACTION BRIDGE
-   * Dispatches workflow choices directly to the database via specific node IDs
    */
   const updateClearanceStatus = async (itemId, newStatus, remarks = '') => {
     try {
-      const response = await api.post(`/api/clearance/item/${itemId}/action`, {
+      const response = await api.post(`/clearance/item/${itemId}/action`, {
         status: newStatus,
         remarks: remarks
       });
@@ -141,7 +138,6 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * CRYPTOGRAPHIC SESSION TERMINATION
-   * Drops session states and safely flushes local memory rows
    */
   const logout = () => {
     setUser(null);

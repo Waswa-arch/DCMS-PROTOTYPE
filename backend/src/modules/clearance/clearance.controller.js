@@ -1,16 +1,10 @@
-import express from 'express';
-import { db } from '../config/db.js';
-import verifyToken from '../middleware/auth.js';
-import roleGuard from '../middleware/roleGuard.js';
-
-const router = express.Router();
+import { db } from '../../config/db.js';
 
 /**
  * FETCH OR AUTO-INITIATE STUDENT CLEARANCE STATUS
- * GET /api/clearance/me
- * Protected: Requires a valid STUDENT token
+ * Safe-provisioning architecture built to withstand concurrent race condition taps
  */
-router.get('/me', verifyToken, roleGuard(['STUDENT']), async (req, res) => {
+export const getMyClearance = async (req, res, next) => {
   const studentId = req.user.id;
 
   try {
@@ -20,14 +14,14 @@ router.get('/me', verifyToken, roleGuard(['STUDENT']), async (req, res) => {
       [studentId]
     );
 
-    // 2. IDEMPOTENT AUTO-PROVISIONING: Built to survive concurrent race condition taps
+    // 2. IDEMPOTENT AUTO-PROVISIONING: Absorbs parallel network hits smoothly
     if (!request) {
       console.log(`[Clearance Engine] Safe-provisioning workflow ledger for Student ID: ${studentId}`);
       
       try {
         await db.exec('BEGIN TRANSACTION;');
         
-        // INSERT OR IGNORE protects against unique constraint collisions at the database layer
+        // UNIQUE constraint rules out double-entry creations
         await db.run(
           "INSERT OR IGNORE INTO clearance_requests (student_id, overall_status) VALUES (?, 'ACTIVE')",
           [studentId]
@@ -43,7 +37,7 @@ router.get('/me', verifyToken, roleGuard(['STUDENT']), async (req, res) => {
         );
 
         if (!existingItems) {
-          // Fetch our harmonized institutional configuration departments
+          // Fetch our 6 harmonized configuration departments
           const departments = await db.all('SELECT id FROM departments ORDER BY sequence_order ASC');
 
           // Generate a single tracking row per department
@@ -57,17 +51,16 @@ router.get('/me', verifyToken, roleGuard(['STUDENT']), async (req, res) => {
 
         await db.exec('COMMIT;');
       } catch (txError) {
-        // Graceful Transaction Recovery Block
         await db.exec('ROLLBACK;').catch(() => {});
         console.warn(`[Clearance Engine] Concurrent transaction handled cleanly. Resolving operational state ledger.`);
         
-        // Pull the valid structural state initialized by the concurrent execution thread
+        // Pull the structural state initialized by the concurrent execution thread
         request = await db.get('SELECT * FROM clearance_requests WHERE student_id = ?', [studentId]);
-        if (!request) throw txError; // Fallback failure if it's a real structural DB error
+        if (!request) throw txError; 
       }
     }
 
-    // 3. Fetch all granular department nodes along with their formal department names
+    // 3. Compile structural nodes into an aggregated payload
     const items = await db.all(`
       SELECT 
         dci.id as item_id,
@@ -93,19 +86,17 @@ router.get('/me', verifyToken, roleGuard(['STUDENT']), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Clearance Retrieval Failure:', error);
-    return res.status(500).json({ success: false, message: 'Unable to compile clearance tracking map.' });
+    next(error);
   }
-});
+};
 
 /**
  * OFFICER/ADMIN ACTION: APPROVE OR FLAG A DEPARTMENTAL NODE
- * POST /api/clearance/item/:id/action
- * Protected: Restricted strictly to authenticated OFFICER or ADMIN roles
+ * Persists status updates, records automated audit metrics, and fires alerts
  */
-router.post('/item/:id/action', verifyToken, roleGuard(['OFFICER', 'ADMIN']), async (req, res) => {
+export const actionClearanceItem = async (req, res, next) => {
   const itemId = req.params.id;
-  const { status, remarks } = req.body; // Expects status: 'APPROVED' or 'FLAGGED'
+  const { status, remarks } = req.body; 
   const officerId = req.user.id;
 
   if (!status || !['APPROVED', 'FLAGGED'].includes(status)) {
@@ -178,9 +169,6 @@ router.post('/item/:id/action', verifyToken, roleGuard(['OFFICER', 'ADMIN']), as
 
   } catch (error) {
     await db.exec('ROLLBACK;').catch(() => {});
-    console.error('Clearance Action Failure:', error);
-    return res.status(500).json({ success: false, message: 'Server transaction failure processing decision.' });
+    next(error);
   }
-});
-
-export default router;
+};

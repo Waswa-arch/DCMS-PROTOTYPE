@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom'; 
 import { useAuth } from '../context/AuthContext';
 
-export function Register({ onNavigate }) {
+export function Register() {
   const { register } = useAuth() || {};
+  const navigate = useNavigate(); 
 
   // Wizard Step Control
   const [step, setStep] = useState(1);
@@ -12,7 +14,7 @@ export function Register({ onNavigate }) {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [regNumber, setRegNumber] = useState('');
-  const [role, setRole] = useState('Student'); // Changed from roleLabel to role
+  const [role, setRole] = useState('Student'); 
   const [department, setDepartment] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -57,14 +59,15 @@ export function Register({ onNavigate }) {
 
     try {
       setLoading(true);
+
       if (register) {
-        // Sends 'role' explicitly now, preventing context crashes
         await register({ firstName, lastName, email, regNumber, role, department, password });
       }
       
       setSuccess('Profile successfully cataloged! Redirecting to login...');
+
       setTimeout(() => {
-        if (onNavigate) onNavigate('/login');
+        navigate('/login'); 
       }, 1500);
     } catch (err) {
       setError(err.message || 'Registration failure occurred.');
@@ -141,6 +144,7 @@ export function Register({ onNavigate }) {
             <div className="brand-sub">Digital Clearance</div>
           </div>
           <div className="sidebar-quote">
+            {/* Principles of the identity script */}
             <blockquote>"Fear God and serve in excellence."</blockquote>
           </div>
           <div className="sidebar-footer">
@@ -151,7 +155,7 @@ export function Register({ onNavigate }) {
         <div className="auth-main">
           <div className="auth-card">
             <div className="tab-bar">
-              <div className="tab" onClick={() => onNavigate && onNavigate('/login')}>Sign in</div>
+              <div className="tab" onClick={() => navigate('/login')}>Sign in</div>
               <div className="tab active">Register</div>
             </div>
 
@@ -171,23 +175,59 @@ export function Register({ onNavigate }) {
                 <p className="auth-desc">Start with your basic personal information.</p>
                 <div className="field-row">
                   <div className="field">
-                    <label>First name</label>
-                    <input type="text" placeholder="Jane" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                    <label htmlFor="reg-first-name">First name</label>
+                    <input 
+                      id="reg-first-name"
+                      name="firstName"
+                      type="text" 
+                      placeholder="Jane" 
+                      value={firstName} 
+                      onChange={(e) => setFirstName(e.target.value)} 
+                      autoComplete="given-name"
+                      required 
+                    />
                   </div>
                   <div className="field">
-                    <label>Last name</label>
-                    <input type="text" placeholder="Mwangi" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+                    <label htmlFor="reg-last-name">Last name</label>
+                    <input 
+                      id="reg-last-name"
+                      name="lastName"
+                      type="text" 
+                      placeholder="Mwangi" 
+                      value={lastName} 
+                      onChange={(e) => setLastName(e.target.value)} 
+                      autoComplete="family-name"
+                      required 
+                    />
                   </div>
                 </div>
                 <div className="field field-icon">
-                  <label>University email</label>
+                  <label htmlFor="reg-email">University email</label>
                   <i className="ti ti-mail"></i>
-                  <input type="email" placeholder="username@kabarak.ac.ke" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  <input 
+                    id="reg-email"
+                    name="email"
+                    type="email" 
+                    placeholder="username@kabarak.ac.ke" 
+                    value={email} 
+                    onChange={(e) => setEmail(e.target.value)} 
+                    autoComplete="email"
+                    required 
+                  />
                 </div>
                 <div className="field field-icon">
-                  <label>Student / Staff ID</label>
+                  <label htmlFor="reg-id-num">Student / Staff ID</label>
                   <i className="ti ti-id-badge"></i>
-                  <input type="text" placeholder="e.g. 20CS001 or STF-045" value={regNumber} onChange={(e) => setRegNumber(e.target.value)} required />
+                  <input 
+                    id="reg-id-num"
+                    name="regNumber"
+                    type="text" 
+                    placeholder="e.g. 20CS001 or STF-045" 
+                    value={regNumber} 
+                    onChange={(e) => setRegNumber(e.target.value)} 
+                    autoComplete="off"
+                    required 
+                  />
                 </div>
                 <button type="submit" className="btn-primary">
                   <span>Continue</span>
@@ -218,8 +258,14 @@ export function Register({ onNavigate }) {
                 </div>
 
                 <div className="field">
-                  <label>Department / School</label>
-                  <select value={department} onChange={(e) => setDepartment(e.target.value)} required={role !== 'Student'}>
+                  <label htmlFor="reg-department">Department / School</label>
+                  <select 
+                    id="reg-department"
+                    name="department"
+                    value={department} 
+                    onChange={(e) => setDepartment(e.target.value)} 
+                    required={role !== 'Student'}
+                  >
                     <option value="" disabled>Select department</option>
                     <option>School of Computing & Informatics</option>
                     <option>School of Business</option>
@@ -253,14 +299,32 @@ export function Register({ onNavigate }) {
                 <p className="auth-desc">Choose a strong password to secure your account.</p>
                 
                 <div className="field field-icon">
-                  <label>Password</label>
+                  <label htmlFor="reg-password">Password</label>
                   <i className="ti ti-lock"></i>
-                  <input type="password" placeholder="At least 8 characters" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                  <input 
+                    id="reg-password"
+                    name="password"
+                    type="password" 
+                    placeholder="At least 8 characters" 
+                    value={password} 
+                    onChange={(e) => setPassword(e.target.value)} 
+                    autoComplete="new-password"
+                    required 
+                  />
                 </div>
                 <div className="field field-icon">
-                  <label>Confirm password</label>
+                  <label htmlFor="reg-confirm-password">Confirm password</label>
                   <i className="ti ti-lock-check"></i>
-                  <input type="password" placeholder="Repeat password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+                  <input 
+                    id="reg-confirm-password"
+                    name="confirmPassword"
+                    type="password" 
+                    placeholder="Repeat password" 
+                    value={confirmPassword} 
+                    onChange={(e) => setConfirmPassword(e.target.value)} 
+                    autoComplete="new-password"
+                    required 
+                  />
                 </div>
 
                 {password && confirmPassword && (

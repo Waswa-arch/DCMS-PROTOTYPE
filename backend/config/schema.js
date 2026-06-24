@@ -45,16 +45,19 @@ async function runSchemaSetup() {
     console.log('[Schema] Table "departments" provisioned.');
 
     // 4. Create CLEARANCE_REQUESTS Table
-    await db.exec(`
-      CREATE TABLE clearance_requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        student_id INTEGER NOT NULL,
-        overall_status TEXT CHECK(overall_status IN ('PENDING', 'ACTIVE', 'APPROVED', 'REJECTED', 'FLAGGED')) DEFAULT 'PENDING',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE RESTRICT
-      )
-    `);
+    // Inside backend/config/schema.js
+
+await db.exec(`
+  CREATE TABLE IF NOT EXISTS clearance_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL,
+    overall_status TEXT CHECK(overall_status IN ('ACTIVE', 'APPROVED', 'FLAGGED')) DEFAULT 'ACTIVE',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(student_id), -- BULLETPROOF SHIELD: Prevents parallel race condition duplication
+    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
     console.log('[Schema] Table "clearance_requests" provisioned.');
 
     // 5. Create DEPT_CLEARANCE_ITEMS Table

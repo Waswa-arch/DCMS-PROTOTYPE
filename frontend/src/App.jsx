@@ -1,57 +1,44 @@
-import React, { useState, useEffect } from 'react';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { ProtectedRoute } from './routes/ProtectedRoute';
+import { PublicRoute } from './routes/PublicRoute';
+
+// 🚀 Pulling directly from your actual, existing visual files!
 import Login from './views/Login';
 import Register from './views/Register';
-import DashboardLayout from './components/DashboardLayout';
+import DashboardLayout from './layouts/DashboardLayout';
 
-const MainApplicationRoutingGate = () => {
-  const { user } = useAuth();
-  const [currentUrlPath, setCurrentUrlPath] = useState(window.location.pathname);
-
-  useEffect(() => {
-    const syncLocationRoute = () => setCurrentUrlPath(window.location.pathname);
-    window.addEventListener('popstate', syncLocationRoute);
-    return () => window.removeEventListener('popstate', syncLocationRoute);
-  }, []);
-
-  const navigateToPage = (targetPath) => {
-    window.history.pushState({}, '', targetPath);
-    setCurrentUrlPath(targetPath);
-  };
-
-  // 🔄 AUTOMATIC AUTH-STATE REDIRECT OBSERVER (Fixes the non-redirection issue safely)
-  useEffect(() => {
-    // Case A: User has successfully authenticated but is still stuck on an authentication route
-    if (user && (currentUrlPath === '/login' || currentUrlPath === '/register' || currentUrlPath === '/signup' || currentUrlPath === '/')) {
-      navigateToPage('/dashboard');
-    }
-    
-    // Case B: No user session exists, but they are trying to access a protected internal route
-    if (!user && currentUrlPath !== '/register' && currentUrlPath !== '/signup' && currentUrlPath !== '/login') {
-      navigateToPage('/login');
-    }
-  }, [user, currentUrlPath]);
-
-  // 1️⃣ PRIORITIZE EXPLICIT PATH MATCHING FIRST (Fixes the Officer Dashboard hijacking)
-  if (currentUrlPath === '/register' || currentUrlPath === '/signup') {
-    return <Register onNavigate={navigateToPage} />;
-  }
-
-  // 2️⃣ IF NO USER SESSION EXISTS, FORCE THE LOGIN SCREEN
-  if (!user) {
-    return <Login onNavigate={navigateToPage} />;
-  }
-
-  // 3️⃣ DEFAULT FALLBACK FOR AUTHENTICATED USERS
-  return <DashboardLayout onNavigate={navigateToPage} />;
-};
-
-function App() {
+export default function App() {
   return (
     <AuthProvider>
-      <MainApplicationRoutingGate />
+      <BrowserRouter>
+        <Routes>
+          {/* 1. PUBLIC AUTHENTICATION ZONE (Guards against signed-in users backtracking) */}
+          <Route path="/login" element={
+            <PublicRoute>
+              <Login />
+            </PublicRoute>
+          } />
+          <Route path="/register" element={
+            <PublicRoute>
+              <Register />
+            </PublicRoute>
+          } />
+          {/* Uniform alias handling for signup links */}
+          <Route path="/signup" element={<Navigate to="/register" replace />} />
+
+          {/* 2. PROTECTED WORKSPACE ZONE (Enforces global session verification) */}
+          <Route path="/dashboard" element={
+            <ProtectedRoute allowedRoles={['STUDENT', 'OFFICER', 'ADMIN']}>
+              <DashboardLayout />
+            </ProtectedRoute>
+          } />
+
+          {/* 3. AUTOMATIC FALLBACK ROOT INTERCEPTOR */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </BrowserRouter>
     </AuthProvider>
   );
 }
-
-export default App;
