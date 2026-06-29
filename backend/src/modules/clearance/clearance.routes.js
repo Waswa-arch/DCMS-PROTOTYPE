@@ -1,5 +1,5 @@
 import express from 'express';
-import { getMyClearance, actionClearanceItem } from './clearance.controller.js';
+import { getMyClearance, getOfficerQueue, actionClearanceItem } from './clearance.controller.js'; // 🆕 Included getOfficerQueue in the imports
 import authenticate from '../../middleware/authenticate.js';
 import authorize from '../../middleware/authorize.js';
 
@@ -7,6 +7,9 @@ const router = express.Router();
 
 // Student-facing route: Access personal clearance tracks or auto-initialize missing ledgers
 router.get('/me', authenticate, authorize(['STUDENT']), getMyClearance);
+
+// Officer route: Fetch all student clearance items matching this officer's assigned department
+router.get('/officer/queue', authenticate, authorize(['OFFICER']), getOfficerQueue);
 
 // Officer & Admin route: Fast-track, approve, or flag individual department steps
 router.post('/item/:id/action', authenticate, authorize(['OFFICER', 'ADMIN']), actionClearanceItem);

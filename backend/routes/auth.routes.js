@@ -18,9 +18,19 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Missing required registration parameters.' });
   }
 
-  // SECURITY LOCKDOWN FIX: Public endpoints must strictly produce STUDENT accounts.
-  // Officer/Admin creation is isolated to a secure, gated configuration router later.
-  const role = 'STUDENT';
+  // 🏛️ PERMANENT DOMAIN-BASED ROUTING ARCHITECTURE
+  let role = 'STUDENT';
+  let department_id = null; // Students don't belong to an administrative department
+
+  if (email.endsWith('@kabarak.edu.ke')) {
+    role = 'OFFICER';
+    department_id = 1; // Default fallback department initialization for institutional clearance
+  } else if (!email.endsWith('@kabarak.ac.ke')) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Registration Denied: Email must be a valid institutional domain (@kabarak.edu.ke or @kabarak.ac.ke).' 
+    });
+  }
 
   try {
     // COLUMN FIX: Querying against the correct snake_case column layout
@@ -33,10 +43,10 @@ router.post('/register', async (req, res) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // COLUMN FIX: Writing to the standardized database columns (password_hash, id_number)
+    // COLUMN FIX: Writing to the standardized database columns (password_hash, id_number, department_id)
     await db.run(
-      'INSERT INTO users (name, email, password_hash, role, id_number) VALUES (?, ?, ?, ?, ?)',
-      [name, email, hashedPassword, role, id_number]
+      'INSERT INTO users (name, email, password_hash, role, id_number, department_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, email, hashedPassword, role, id_number, department_id]
     );
 
     return res.status(201).json({ success: true, message: 'Institutional registration sequence verified.' });
@@ -76,9 +86,9 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Access Denied: Secure credential verification failed.' });
     }
 
-    // SECURITY FIX: Removed the public fallback string to prevent arbitrary signature forging
+    // SECURITY FIX: Include the assigned role and department_id straight into the encrypted token
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, id_number: user.id_number },
+      { id: user.id, email: user.email, role: user.role, id_number: user.id_number, department_id: user.department_id },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -92,7 +102,7 @@ router.post('/login', async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        // Compiling backward-compatibility hooks so old frontend code won't immediately break
+        department_id: user.department_id,
         id_number: user.id_number,
         idNumber: user.id_number 
       }

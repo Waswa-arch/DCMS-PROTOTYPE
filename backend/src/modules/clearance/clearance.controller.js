@@ -91,6 +91,46 @@ export const getMyClearance = async (req, res, next) => {
 };
 
 /**
+ * OFFICER: FETCH ALL PENDING ITEMS FOR THE OFFICER'S ASSIGNED DEPARTMENT
+ * Supplies the tailored department queue layout with live student requests
+ */
+export const getOfficerQueue = async (req, res, next) => {
+  const officerDeptId = req.user.department_id; 
+
+  if (!officerDeptId) {
+    return res.status(403).json({
+      success: false,
+      message: "Access Denied: Your profile is not bound to an institutional department configuration."
+    });
+  }
+
+  try {
+    const queue = await db.all(`
+      SELECT 
+        dci.id as item_id,
+        dci.status,
+        dci.remarks,
+        u.name as student_name,
+        u.id_number as student_id_number,
+        u.email as student_email
+      FROM dept_clearance_items dci
+      JOIN clearance_requests cr ON dci.request_id = cr.id
+      JOIN users u ON cr.student_id = u.id
+      WHERE dci.department_id = ? AND dci.status = 'PENDING'
+      ORDER BY cr.created_at ASC
+    `, [officerDeptId]);
+
+    return res.status(200).json({
+      success: true,
+      queue
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * OFFICER/ADMIN ACTION: APPROVE OR FLAG A DEPARTMENTAL NODE
  * Persists status updates, records automated audit metrics, and fires alerts
  */
