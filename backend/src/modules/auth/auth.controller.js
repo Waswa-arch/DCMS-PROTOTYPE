@@ -5,17 +5,48 @@ import { env } from '../../config/env.js';
 
 /**
  * SECURE USER REGISTRATION
- * Forces all public signups to 'STUDENT' status to prevent exploit injections
+ * Implements strict domain-based RBAC routing for institutional emails.
  */
-export const register = async (req, res, next) => {
+export const register = async (req, res) => {
   const { id_number, name, email, password } = req.body;
 
   if (!id_number || !name || !email || !password) {
     return res.status(400).json({ success: false, message: 'All fields are strictly required.' });
   }
 
+  // 1. Domain-Based Role Mapping
+  let role = 'STUDENT';
+  let department_assigned_id = null;
+
+  if (email.endsWith('@kabarak.edu.ke')) {
+    role = 'OFFICER';
+    try {
+      const defaultDept = await db.get('SELECT id FROM departments ORDER BY sequence_order ASC LIMIT 1');
+      
+      if (!defaultDept) {
+        console.error('CRITICAL: Registration blocked. Departments table empty.');
+        return res.status(503).json({ 
+          success: false, 
+          message: 'System configuration error. Contact administrator.' 
+        });
+      }
+      department_assigned_id = defaultDept.id;
+    } catch (err) {
+      console.error('Database Error during department lookup:', err);
+      return res.status(500).json({ success: false, message: 'Internal server error.' });
+    }
+  } else if (email.endsWith('@kabarak.ac.ke')) {
+    role = 'STUDENT';
+    department_assigned_id = null;
+  } else {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Registration denied: must use a valid Kabarak institutional email.' 
+    });
+  }
+
   try {
-    // 1. Verify if the credentials conflict with an existing account
+    // 2. Verify if the credentials conflict with an existing account
     const existingUser = await db.get(
       'SELECT id FROM users WHERE id_number = ? OR email = ?',
       [id_number, email]
@@ -28,14 +59,14 @@ export const register = async (req, res, next) => {
       });
     }
 
-    // 2. Hash the user plaintext password securely
+    // 3. Hash the user plaintext password securely
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // 3. Persist the clean data record into the database (Always forcing STUDENT role)
+    // 4. Persist the clean data record into the database
     await db.run(
-      'INSERT INTO users (id_number, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
-      [id_number, name, email, passwordHash, 'STUDENT']
+      'INSERT INTO users (id_number, name, email, password_hash, role, department_assigned_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [id_number, name, email, passwordHash, role, department_assigned_id]
     );
 
     return res.status(201).json({
@@ -43,57 +74,48 @@ export const register = async (req, res, next) => {
       message: 'Account successfully registered. You may now log in.'
     });
   } catch (error) {
-    next(error);
+    console.error('Registration Error:', error);
+    return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
   }
 };
 
 /**
  * SECURE USER LOGIN
- * Verifies credentials across roles and signs an encrypted application JWT token
  */
-export const login = async (req, res, next) => {
+export const login = async (req, res) => {
   const { id_number, password } = req.body;
 
   if (!id_number || !password) {
     return res.status(400).json({ success: false, message: 'ID Number/Email and Password are required.' });
   }
 
-  // 1. Bulletproof the input: removed accidental spaces and force to lowercase
-  // Safely placed AFTER we confirm id_number actually exists
   const cleanInput = id_number.trim().toLowerCase();
 
-  // 🔴 DEBUG LOG 1
-  console.log(`📥 [LOGIN ATTEMPT] Typed: "${id_number}" -> Cleaned: "${cleanInput}"`);
-
   try {
-    // 2. Retrieve user context (Case-insensitive search for BOTH ID and Email)
     const user = await db.get(
       'SELECT * FROM users WHERE LOWER(id_number) = ? OR LOWER(email) = ?', 
       [cleanInput, cleanInput] 
     );
     
-    // 🔴 DEBUG LOG 2: Did the database find the user?
-    console.log("🔍 [DB SEARCH] User found:", user ? user.name : "NO MATCH FOUND");
-
     if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid Credentials.' });
     }
 
-    // 3. Compare incoming passphrase against the hashed binary representation
     const isMatch = await bcrypt.compare(password, user.password_hash);
     
-    // 🔴 DEBUG LOG 3: Did the passwords match?
-    console.log("🔐 [PASSWORD CHECK] Hash matched:", isMatch);
-
     if (!isMatch) {
       return res.status(401).json({ success: false, message: 'Invalid Credentials.' });
     }
 
-    // 4. Issue a tamper-proof cryptographic JWT session token
     const token = jwt.sign(
-      { id: user.id, id_number: user.id_number, role: user.role },
+      { 
+        id: user.id, 
+        id_number: user.id_number, 
+        role: user.role,
+        department_assigned_id: user.department_assigned_id 
+      },
       env.jwtSecret,
-      { expiresIn: '1d' }
+      { expiresIn: '24h' }
     );
 
     return res.status(200).json({
@@ -105,10 +127,12 @@ export const login = async (req, res, next) => {
         id_number: user.id_number,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        department_assigned_id: user.department_assigned_id
       }
     });
   } catch (error) {
-    next(error);
+    console.error('Login Error:', error);
+    return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
   }
 };
