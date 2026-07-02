@@ -1,6 +1,5 @@
 import app from './src/app.js';
 import { env } from './src/config/env.js';
-import { db } from './src/config/db.js';
 import { runMigrations } from './src/database/migrate.js';
 import { runSeeds } from './src/database/seed.js';
 

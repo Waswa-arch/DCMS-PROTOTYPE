@@ -1,25 +1,24 @@
 import express from 'express';
 import cors from 'cors';
-import errorHandler from './middleware/errorHandler.js';
+import { env } from './config/env.js';
 import authRoutes from './modules/auth/auth.routes.js';
-import clearanceRoutes from './modules/clearance/clearance.routes.js'; // 🆕 Import Clearance Router
+import clearanceRoutes from './modules/clearance/clearance.routes.js';
+import errorHandler from './middleware/errorHandler.js';
 
 const app = express();
 
-// Global Request Pipeline Middleware
-app.use(cors());
+// Middleware
+app.use(cors({
+  origin: env.frontendUrl,
+  credentials: true
+}));
 app.use(express.json());
 
-// ROUTE MOUNTING
+// Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/clearance', clearanceRoutes); // 🆕 Mount Clearance Endpoints
+app.use('/api/clearance', clearanceRoutes);
 
-// API Base Root Health Check Route
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ success: true, message: 'DCMS Engine Core Online.' });
-});
-
-// Centralized Catch-All Error Boundary Interceptor
+// Global Error Handler
 app.use(errorHandler);
 
 export default app;

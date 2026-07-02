@@ -1,265 +1,167 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { 
-  CheckCircle, AlertTriangle, Users, Clock, 
-  Bell, FileText, Check, MessageSquare 
-} from 'lucide-react';
+import { api } from '../../utils/api';
 import DashboardLayout from '../../layouts/DashboardLayout';
 
-export default function OfficerDashboard() {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('tracker');
-  const [toast, setToast] = useState(null);
-  const [loading, setLoading] = useState(true);
-  
-  // Real API Data States
+const OfficerDashboard = () => {
   const [queue, setQueue] = useState([]);
-  const [stats, setStats] = useState({ total: 0, pending: 0, cleared: 0 });
-  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [remarks, setRemarks] = useState({});
-  const [actioningId, setActioningId] = useState(null);
+  const [actioning, setActioning] = useState(null);
 
-  const triggerToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 4000);
-  };
-
-  // --- API INTERFACE LAYER ---
-  const fetchDashboardData = async () => {
+  const fetchQueue = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-
-      // 1. Fetch Real Department Queue
-      const queueRes = await fetch('http://localhost:5001/api/clearance/officer/queue', { headers });
-      const queueData = await queueRes.json();
-      
-      // 2. Fetch Notifications
-      const notifyRes = await fetch('http://localhost:5001/api/notifications', { headers });
-      const notifyData = await notifyRes.json();
-
-      if (queueData.success) {
-        const activeQueue = queueData.queue || [];
-        setQueue(activeQueue);
-        
-        // Calculate dynamic real stats metrics based on current department queue parameters
-        const pendingCount = activeQueue.filter(item => item.status === 'PENDING').length;
-        const approvedCount = activeQueue.filter(item => item.status === 'APPROVED').length;
-        setStats({
-          total: activeQueue.length,
-          pending: pendingCount,
-          cleared: approvedCount
-        });
-      }
-      
-      if (notifyData.success) {
-        setNotifications(notifyData.notifications || []);
-      }
+      setError(null);
+      const { data } = await api.get('/clearance/officer/queue');
+      setQueue(data.queue || []);
     } catch (err) {
-      console.error("Dashboard synchronization error:", err);
+      setError('Failed to fetch clearance queue. Check your connection and try again.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (user) fetchDashboardData();
-  }, [user]);
+    fetchQueue();
+  }, []);
 
-  // Handle Approve or Flag Form Submissions
-  const handleAction = async (itemId, targetStatus) => {
+  const handleAction = async (id, status) => {
+    const itemRemarks = remarks[id]?.trim() || '';
+
+    if (status === 'FLAGGED' && !itemRemarks) {
+      alert('You must provide a remark when flagging an item. The student needs to know why.');
+      return;
+    }
+
     try {
-      setActioningId(itemId);
-      const token = localStorage.getItem('token');
-      const itemRemarks = remarks[itemId] || '';
-
-      const response = await fetch(`http://localhost:5000/api/clearance/item/${itemId}/action`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: targetStatus, remarks: itemRemarks })
+      setActioning(id);
+      await api.post(`/clearance/item/${id}/action`, {
+        status,
+        remarks: itemRemarks,
       });
-
-      const data = await response.json();
-      if (data.success) {
-        triggerToast(`Item successfully updated to ${targetStatus}`);
-        setRemarks(prev => ({ ...prev, [itemId]: '' }));
-        fetchDashboardData(); // Refresh datasets live
-      } else {
-        alert(`Action rejected: ${data.message}`);
-      }
+      setRemarks((prev) => {
+        const copy = { ...prev };
+        delete copy[id];
+        return copy;
+      });
+      await fetchQueue();
     } catch (err) {
-      alert('Network transmission failed while processing administrative decision.');
+      alert('Action failed. Please try again.');
     } finally {
-      setActioningId(null);
+      setActioning(null);
     }
   };
 
-  const markNotificationRead = async (id) => {
-    try {
-      const token = localStorage.getItem('token');
-      await fetch(`http://localhost:5000/api/notifications/${id}/read`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      setNotifications(prev => prev.filter(n => n.id !== id));
-    } catch (err) {
-      console.error(err);
-    }
+  const handleRemarksChange = (id, value) => {
+    setRemarks((prev) => ({ ...prev, [id]: value }));
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <p className="text-sm font-bold text-slate-500 animate-pulse">Syncing Department Clearance Registers...</p>
-      </div>
+      <DashboardLayout>
+        <div className="p-8 text-center text-slate-400 text-sm">
+          Loading department queue...
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout activeTab={activeTab} setActiveTab={setActiveTab} toast={toast} setToast={setToast}>
-      
-      {/* 📊 GLOBAL STATS HERO SECTION (SCOPED) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-sm">
-          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl"><Users className="h-5 w-5" /></div>
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div>
-            <p className="text-[10px] uppercase text-slate-400 font-black tracking-wider">Total Requests</p>
-            <h3 className="text-xl font-black text-slate-800">{stats.total}</h3>
+            <h1 className="text-xl font-bold text-slate-800 tracking-tight">
+              Department Clearance Queue
+            </h1>
+            <p className="text-xs text-slate-500 mt-1">
+              Review and action pending student clearance requests for your department.
+            </p>
           </div>
+          <button
+            onClick={fetchQueue}
+            className="text-xs text-slate-500 hover:text-slate-700 underline"
+          >
+            Refresh
+          </button>
         </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-sm">
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl"><Clock className="h-5 w-5" /></div>
-          <div>
-            <p className="text-[10px] uppercase text-slate-400 font-black tracking-wider">Pending Action</p>
-            <h3 className="text-xl font-black text-slate-800">{stats.pending}</h3>
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-sm">
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><CheckCircle className="h-5 w-5" /></div>
-          <div>
-            <p className="text-[10px] uppercase text-slate-400 font-black tracking-wider">Cleared Rows</p>
-            <h3 className="text-xl font-black text-slate-800">{stats.cleared}</h3>
-          </div>
-        </div>
-      </div>
 
-      {/* CONDITIONAL SUB-VIEW MANAGER */}
-      {activeTab === 'tracker' ? (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-            <div>
-              <h2 className="text-base font-extrabold text-slate-800">💼 Departmental Clearance Ledger</h2>
-              <p className="text-xs text-slate-400">Authorized processing queue bound to your administrative token signature.</p>
-            </div>
-            <span className="text-[10px] bg-slate-200 text-slate-700 font-black px-2.5 py-1 rounded-full uppercase">
-              Dept ID: {user?.department_id || 'System'}
-            </span>
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+            {error}
+          </div>
+        )}
+
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 border-b border-slate-200 px-4 py-3">
+            <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Pending Items — {queue.length} {queue.length === 1 ? 'request' : 'requests'}
+            </h2>
           </div>
 
           {queue.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 text-xs font-bold">
-              🎉 No pending clearance requests found for your department.
+            <div className="px-6 py-12 text-center">
+              <p className="text-sm font-medium text-slate-500">
+                No pending clearance requests in your department.
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                Check back later or refresh the page.
+              </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                  <tr>
-                    <th className="p-4">Student Context</th>
-                    <th className="p-4">Registration Keys</th>
-                    <th className="p-4">Status Token</th>
-                    <th className="p-4 w-1/3">Administrative Remarks</th>
-                    <th className="p-4 text-center">Action Deck</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {queue.map((req) => (
-                    <tr key={req.item_id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="p-4 font-bold text-slate-800">{req.student_name}</td>
-                      <td className="p-4 font-mono text-slate-500">
-                        {req.student_id_number}
-                        <span className="block font-sans text-[10px] text-slate-400 mt-0.5">{req.student_email}</span>
-                      </td>
-                      <td className="p-4">
-                        <span className="px-2 py-0.5 rounded-full font-black text-[10px] bg-amber-50 border border-amber-200 text-amber-700 uppercase">
-                          {req.status}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-                          <MessageSquare className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                          <input 
-                            type="text"
-                            placeholder="Add hold remarks or resolution parameters..."
-                            value={remarks[req.item_id] || ''}
-                            onChange={(e) => setRemarks(prev => ({ ...prev, [req.item_id]: e.target.value }))}
-                            className="w-full bg-transparent text-xs text-slate-700 focus:outline-none"
-                          />
-                        </div>
-                      </td>
-                      <td className="p-4 text-center">
-                        <div className="flex justify-center items-center gap-1.5">
-                          <button
-                            disabled={actioningId !== null}
-                            onClick={() => handleAction(req.item_id, 'APPROVED')}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-2 rounded-xl transition disabled:opacity-50"
-                            title="Grant Department Clearance"
-                          >
-                            <Check className="h-3.5 w-3.5 stroke-[3]" />
-                          </button>
-                          <button
-                            disabled={actioningId !== null}
-                            onClick={() => handleAction(req.item_id, 'FLAGGED')}
-                            className="bg-rose-600 hover:bg-rose-700 text-white font-bold p-2 rounded-xl transition disabled:opacity-50"
-                            title="Flag Request Hold"
-                          >
-                            <AlertTriangle className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="divide-y divide-slate-100">
+              {queue.map((item) => (
+                <div
+                  key={item.item_id}
+                  className="p-4 flex flex-col lg:flex-row lg:items-start justify-between gap-4 hover:bg-slate-50/50 transition-colors"
+                >
+                  <div className="space-y-1 min-w-0">
+                    <div className="text-sm font-bold text-slate-800">
+                      {item.student_name}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                      <span className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                        {item.student_id_number}
+                      </span>
+                      <span>{item.student_email}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto lg:max-w-xl">
+                    <input
+                      type="text"
+                      placeholder="Add remarks (required when flagging)..."
+                      className="bg-slate-50 border border-slate-200 text-xs px-3 py-2 rounded-lg focus:outline-none focus:border-slate-400 w-full lg:w-72 transition-colors"
+                      value={remarks[item.item_id] || ''}
+                      onChange={(e) => handleRemarksChange(item.item_id, e.target.value)}
+                      disabled={actioning === item.item_id}
+                    />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => handleAction(item.item_id, 'APPROVED')}
+                        disabled={actioning !== null}
+                        className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors"
+                      >
+                        {actioning === item.item_id ? '...' : 'Approve'}
+                      </button>
+                      <button
+                        onClick={() => handleAction(item.item_id, 'FLAGGED')}
+                        disabled={actioning !== null}
+                        className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors"
+                      >
+                        {actioning === item.item_id ? '...' : 'Flag'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
-      ) : (
-        /* 🔔 NOTIFICATIONS ACCESSIBILITY BOARD */
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div>
-            <h2 className="text-base font-extrabold text-slate-800">🔔 Administrative Alerts Panel</h2>
-            <p className="text-xs text-slate-400">Real-time action logs generated by institutional core triggers.</p>
-          </div>
-          <div className="space-y-2">
-            {notifications.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-6">Your inbox stream is completely clear.</p>
-            ) : (
-              notifications.map(n => (
-                <div key={n.id} className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex justify-between items-start gap-4">
-                  <div className="flex gap-3">
-                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg mt-0.5"><Bell className="h-4 w-4" /></div>
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-800">{n.title}</h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5">{n.message}</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => markNotificationRead(n.id)}
-                    className="text-[10px] text-indigo-600 hover:bg-indigo-50 font-bold px-2.5 py-1 rounded-lg transition"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+      </div>
     </DashboardLayout>
   );
-}
+};
+
+export default OfficerDashboard;
