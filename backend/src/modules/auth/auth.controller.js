@@ -8,7 +8,8 @@ import { env } from '../../config/env.js';
  * Implements strict domain-based RBAC routing for institutional emails.
  */
 export const register = async (req, res) => {
-  const { id_number, name, email, password } = req.body;
+  const { id_number, name, password } = req.body;
+  const email = req.body.email?.trim().toLowerCase();
 
   if (!id_number || !name || !email || !password) {
     return res.status(400).json({ success: false, message: 'All fields are strictly required.' });
