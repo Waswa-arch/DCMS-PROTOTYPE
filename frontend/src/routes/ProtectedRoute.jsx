@@ -17,7 +17,7 @@ export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
 
  // 2. If roles are specified, ensure the user profile has appropriate institutional clearance
   if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
-    console.warn(`[Security Guard] Blocked role [${user.role}] from accessing: ${location.pathname}`);
+    
     
     // Fallback safely to the main dashboard canvas where their native role layout handles rendering
     return <Navigate to="/dashboard" replace />;
