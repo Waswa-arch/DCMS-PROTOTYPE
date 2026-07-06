@@ -1,38 +1,118 @@
-import React, { useState } from 'react';
+﻿import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { 
-  LogOut, User, ShieldCheck, FileText, Building2, Check 
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  LogOut, User, ShieldCheck, FileText, Building2, LayoutDashboard
 } from 'lucide-react';
 
-// The layout frame accepts 'children' (the pages), along with active tab tracking props from the pages
-const DashboardLayout = ({ children, activeTab, setActiveTab, toast, setToast }) => {
+const DashboardLayout = ({ children }) => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
         <div className="bg-white p-6 rounded-xl shadow border border-slate-200 text-center max-w-sm">
-          <p className="text-sm font-bold text-slate-700 mb-4">No active verification token session discovered.</p>
-          <a href="/login" className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg uppercase">Return to Login Gateway</a>
+          <p className="text-sm font-bold text-slate-700 mb-4">No active session found.</p>
+          <a href="/login" className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg uppercase">
+            Return to Login
+          </a>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen flex bg-slate-50 text-slate-900 font-sans relative antialiased">
-      
-      {/* 🔔 FLOATING ALERT TOAST */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-slate-700">
-          <div className="p-1 rounded-full bg-emerald-500 text-slate-900">
-            <Check className="h-4 w-4 stroke-[3]" />
-          </div>
-          <p className="text-xs font-bold tracking-wide">{toast}</p>
-        </div>
-      )}
+  const isActive = (path) => location.pathname === path;
 
-      {/* 🛠️ NAVIGATION SIDEBAR */}
+  const getNavItems = () => {
+    if (user.role === 'STUDENT') {
+      return (
+        <React.Fragment>
+          <button
+            onClick={() => navigate('/dashboard/clearance')}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all ${
+              isActive('/dashboard/clearance')
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <FileText className="h-4 w-4" /> Student Tracker
+          </button>
+          <button
+            onClick={() => navigate('/dashboard/profile')}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all ${
+              isActive('/dashboard/profile')
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <User className="h-4 w-4" /> Profile Settings
+          </button>
+        </React.Fragment>
+      );
+    }
+
+    if (user.role === 'OFFICER') {
+      return (
+        <React.Fragment>
+          <button
+            onClick={() => navigate('/dashboard/queue')}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all ${
+              isActive('/dashboard/queue')
+                ? 'bg-teal-600 text-white shadow-md'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <Building2 className="h-4 w-4" /> Administrative Console
+          </button>
+          <button
+            onClick={() => navigate('/dashboard/profile')}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all ${
+              isActive('/dashboard/profile')
+                ? 'bg-teal-600 text-white shadow-md'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <User className="h-4 w-4" /> Officer Profile Page
+          </button>
+        </React.Fragment>
+      );
+    }
+
+    if (user.role === 'ADMIN') {
+      return (
+        <React.Fragment>
+          <button
+            onClick={() => navigate('/dashboard/admin')}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all ${
+              isActive('/dashboard/admin')
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <LayoutDashboard className="h-4 w-4" /> Admin Console
+          </button>
+          <button
+            onClick={() => navigate('/dashboard/profile')}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all ${
+              isActive('/dashboard/profile')
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <User className="h-4 w-4" /> Profile Settings
+          </button>
+        </React.Fragment>
+      );
+    }
+
+    return null;
+  };
+
+  return (
+    <div className="min-h-screen flex bg-slate-50 text-slate-900 font-sans antialiased">
+
       <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col justify-between shadow-xl hidden md:flex flex-shrink-0">
         <div>
           <div className="p-6 border-b border-slate-800 bg-slate-950 flex items-center gap-3">
@@ -42,56 +122,26 @@ const DashboardLayout = ({ children, activeTab, setActiveTab, toast, setToast })
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Digital Clearance</p>
             </div>
           </div>
-
           <nav className="p-4 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase px-3 mb-3 tracking-wider">Core Operations</div>
-            
-            {user.role !== 'OFFICER' ? (
-              <>
-                <button 
-                  onClick={() => setActiveTab('tracker')} 
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all ${activeTab === 'tracker' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
-                >
-                  <FileText className="h-4 w-4" /> Student Tracker
-                </button>
-                <button 
-                  onClick={() => setActiveTab('profile')} 
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all ${activeTab === 'profile' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
-                >
-                  <User className="h-4 w-4" /> Profile Settings
-                </button>
-              </>
-            ) : (
-              <>
-                <button 
-                  onClick={() => setActiveTab('tracker')} 
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all ${activeTab === 'tracker' ? 'bg-teal-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
-                >
-                  <Building2 className="h-4 w-4" /> Administrative Console
-                </button>
-                <button 
-                  onClick={() => setActiveTab('profile')} 
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all ${activeTab === 'profile' ? 'bg-teal-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
-                >
-                  <User className="h-4 w-4" /> Officer Profile Page
-                </button>
-              </>
-            )}
+            <div className="text-xs font-semibold text-slate-500 uppercase px-3 mb-3 tracking-wider">
+              Core Operations
+            </div>
+            {getNavItems()}
           </nav>
         </div>
 
         <div className="p-4 border-t border-slate-800 bg-slate-950/40 space-y-3">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-xl bg-slate-800 flex items-center justify-center text-emerald-400 font-black">
-              {user.name ? user.name.charAt(0) : 'U'}
+              {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
             </div>
             <div className="overflow-hidden">
               <h4 className="text-xs font-bold truncate text-white">{user.name}</h4>
               <p className="text-[10px] font-mono text-slate-400 truncate">{user.role}</p>
             </div>
           </div>
-          <button 
-            onClick={logout} 
+          <button
+            onClick={logout}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold rounded-lg text-white bg-rose-600 hover:bg-rose-700 transition-colors cursor-pointer"
           >
             <LogOut className="h-3.5 w-3.5" /> Close Session
@@ -99,7 +149,6 @@ const DashboardLayout = ({ children, activeTab, setActiveTab, toast, setToast })
         </div>
       </aside>
 
-      {/* 💻 MAIN ACTION DISPLAY CONTAINER */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 z-30 shadow-sm">
           <div className="flex items-center gap-3">
@@ -113,7 +162,6 @@ const DashboardLayout = ({ children, activeTab, setActiveTab, toast, setToast })
           </div>
         </header>
 
-        {/* This injection slot renders whatever content the specific dashboard page drops inside */}
         <main className="flex-1 overflow-y-auto p-6 md:p-8">
           <div className="max-w-6xl mx-auto space-y-6">
             {children}

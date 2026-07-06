@@ -1,6 +1,19 @@
 import { db } from '../../config/db.js';
 
 /**
+ * Resolves an officer's CURRENT department from the database, not the JWT.
+ * The JWT can go stale for up to 24h after an ADMIN reassigns an officer
+ * (see modules/admin/admin.controller.js), so trusting the token here would
+ * let a reassigned officer keep acting on their old department until their
+ * token expires. This does one extra lookup per request — worth it.
+ */
+async function resolveOfficerDepartmentId(user) {
+  if (user.role === 'ADMIN') return user.department_assigned_id;
+  const row = await db.get('SELECT department_assigned_id FROM users WHERE id = ?', [user.id]);
+  return row?.department_assigned_id ?? null;
+}
+
+/**
  * FETCH OR AUTO-INITIATE STUDENT CLEARANCE STATUS
  */
 export const getMyClearance = async (req, res) => {
@@ -79,16 +92,16 @@ export const getMyClearance = async (req, res) => {
  * OFFICER: FETCH ALL PENDING ITEMS
  */
 export const getOfficerQueue = async (req, res) => {
-  const officerDeptId = req.user.department_assigned_id;
-
-  if (!officerDeptId) {
-    return res.status(403).json({
-      success: false,
-      message: 'Access Denied: Your profile is not bound to a department.'
-    });
-  }
-
   try {
+    const officerDeptId = await resolveOfficerDepartmentId(req.user);
+
+    if (!officerDeptId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access Denied: Your profile is not bound to a department.'
+      });
+    }
+
     const queue = await db.all(`
       SELECT 
         dci.id as item_id,
@@ -135,6 +148,18 @@ export const actionClearanceItem = async (req, res) => {
 
     if (!item) {
       return res.status(404).json({ success: false, message: 'Item not found.' });
+    }
+
+    // SECURITY: an OFFICER may only action items in their own department.
+    // ADMIN bypasses this. Department is resolved fresh from DB, not JWT.
+    if (req.user.role === 'OFFICER') {
+      const currentDeptId = await resolveOfficerDepartmentId(req.user);
+      if (item.department_id !== currentDeptId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden: this item does not belong to your department.'
+        });
+      }
     }
 
     await db.run('BEGIN');
