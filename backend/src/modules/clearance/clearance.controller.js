@@ -136,6 +136,17 @@ export const actionClearanceItem = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invalid action payload.' });
   }
 
+  // A flag with no reason is useless to the student trying to resolve it
+  // and to any officer reviewing it later. Enforce this server-side —
+  // trusting the frontend's required-field alone means a raw API call
+  // (or a future UI that forgets to enforce it) can still flag blind.
+  if (status === 'FLAGGED' && (!remarks || !remarks.trim())) {
+    return res.status(400).json({
+      success: false,
+      message: 'A reason is required when flagging an item.'
+    });
+  }
+
   try {
     const item = await db.get(
       `SELECT dci.*, d.name as dept_name, cr.student_id, cr.id as request_id 
