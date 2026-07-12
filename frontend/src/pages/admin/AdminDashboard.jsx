@@ -10,6 +10,7 @@ export default function AdminDashboard() {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(null);
   const [feedback, setFeedback] = useState({});
+  const [pendingChanges, setPendingChanges] = useState({});
 
   const fetchData = async () => {
     try {
@@ -32,10 +33,25 @@ export default function AdminDashboard() {
     fetchData();
   }, []);
 
-  const handleReassign = async (officerId, newDeptId) => {
+  const handleSelectDepartment = (officerId, newDeptId) => {
     if (!newDeptId) return;
-    setSaving(officerId);
+    setPendingChanges((prev) => ({ ...prev, [officerId]: newDeptId }));
     setFeedback((prev) => ({ ...prev, [officerId]: null }));
+  };
+
+  const handleCancelPending = (officerId) => {
+    setPendingChanges((prev) => {
+      const copy = { ...prev };
+      delete copy[officerId];
+      return copy;
+    });
+  };
+
+  const handleConfirmReassign = async (officerId) => {
+    const newDeptId = pendingChanges[officerId];
+    if (!newDeptId) return;
+
+    setSaving(officerId);
 
     try {
       const res = await api.patch(`/admin/officers/${officerId}/department`, {
@@ -56,6 +72,11 @@ export default function AdminDashboard() {
             : o
         )
       );
+      setPendingChanges((prev) => {
+        const copy = { ...prev };
+        delete copy[officerId];
+        return copy;
+      });
     } catch (err) {
       setFeedback((prev) => ({
         ...prev,
@@ -168,8 +189,8 @@ export default function AdminDashboard() {
 
                   <div className="flex items-center gap-2 shrink-0">
                     <select
-                      defaultValue={officer.department_assigned_id || ''}
-                      onChange={(e) => handleReassign(officer.id, e.target.value)}
+                      value={pendingChanges[officer.id] ?? officer.department_assigned_id ?? ''}
+                      onChange={(e) => handleSelectDepartment(officer.id, e.target.value)}
                       disabled={saving === officer.id}
                       className="bg-slate-50 border border-slate-200 text-xs px-3 py-2 rounded-lg focus:outline-none focus:border-slate-400 transition-colors disabled:opacity-50 min-w-[200px]"
                     >
@@ -182,6 +203,22 @@ export default function AdminDashboard() {
                         </option>
                       ))}
                     </select>
+                    {pendingChanges[officer.id] && saving !== officer.id && (
+                      <>
+                        <button
+                          onClick={() => handleConfirmReassign(officer.id)}
+                          className="text-xs font-bold px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => handleCancelPending(officer.id)}
+                          className="text-xs font-bold px-3 py-2 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    )}
                     {saving === officer.id && (
                       <span className="text-xs text-slate-400 animate-pulse">Saving...</span>
                     )}

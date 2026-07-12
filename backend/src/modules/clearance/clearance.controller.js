@@ -180,29 +180,46 @@ export const actionClearanceItem = async (req, res) => {
       VALUES (?, ?, ?)
     `, [item.student_id, `Clearance Update: ${item.dept_name}`, `Status: ${status}. Remarks: ${remarks || 'None'}`]);
 
-    const totalNodes = await db.get(
-      'SELECT COUNT(*) as cnt FROM dept_clearance_items WHERE request_id = ?',
+    // Re-derive overall_status from the CURRENT state of every item, rather
+    // than incrementally patching based only on this one action. The old
+    // two-branch logic (all-approved -> APPROVED, this-action-was-FLAGGED ->
+    // FLAGGED) had no path back out of FLAGGED once set, so reversing a flag
+    // left overall_status permanently stuck even after the underlying item
+    // was corrected. Recomputing from scratch handles that and any future
+    // combination without needing a new special case each time.
+    const statusCounts = await db.all(
+      `SELECT status, COUNT(*) as cnt FROM dept_clearance_items WHERE request_id = ? GROUP BY status`,
       [item.request_id]
     );
-    const approvedNodes = await db.get(
-      "SELECT COUNT(*) as cnt FROM dept_clearance_items WHERE request_id = ? AND status = 'APPROVED'",
+    const counts = { PENDING: 0, APPROVED: 0, FLAGGED: 0 };
+    statusCounts.forEach((row) => { counts[row.status] = row.cnt; });
+    const totalItems = counts.PENDING + counts.APPROVED + counts.FLAGGED;
+
+    let newOverallStatus;
+    if (counts.FLAGGED > 0) {
+      newOverallStatus = 'FLAGGED';
+    } else if (counts.APPROVED === totalItems) {
+      newOverallStatus = 'APPROVED';
+    } else {
+      newOverallStatus = 'ACTIVE';
+    }
+
+    const currentRequest = await db.get(
+      'SELECT overall_status FROM clearance_requests WHERE id = ?',
       [item.request_id]
     );
 
-    if (totalNodes.cnt === approvedNodes.cnt) {
+    if (newOverallStatus !== currentRequest.overall_status) {
       await db.run(
-        "UPDATE clearance_requests SET overall_status = 'APPROVED', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        [item.request_id]
+        'UPDATE clearance_requests SET overall_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [newOverallStatus, item.request_id]
       );
-      await db.run(
-        "INSERT INTO notifications (user_id, title, message) VALUES (?, 'Clearance Complete!', 'All departments have cleared your records.')",
-        [item.student_id]
-      );
-    } else if (status === 'FLAGGED') {
-      await db.run(
-        "UPDATE clearance_requests SET overall_status = 'FLAGGED', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        [item.request_id]
-      );
+      if (newOverallStatus === 'APPROVED') {
+        await db.run(
+          "INSERT INTO notifications (user_id, title, message) VALUES (?, 'Clearance Complete!', 'All departments have cleared your records.')",
+          [item.student_id]
+        );
+      }
     }
 
     await db.run('COMMIT');

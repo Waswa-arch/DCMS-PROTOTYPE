@@ -116,14 +116,14 @@ export function Login() {
               <p className="auth-desc">Access your clearance records and track your application status.</p>
               
               <div className="field field-icon">
-                <label>University email</label>
+                <label htmlFor="login-email">University email</label>
                 <i className="ti ti-mail"></i>
-                <input type="email" placeholder="username@kabarak.ac.ke" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <input id="login-email" name="email" type="email" autoComplete="username" placeholder="username@kabarak.ac.ke" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
               <div className="field field-icon">
-                <label>Password</label>
+                <label htmlFor="login-password">Password</label>
                 <i className="ti ti-lock"></i>
-                <input type="password" placeholder="Enter your password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <input id="login-password" name="password" type="password" autoComplete="current-password" placeholder="Enter your password" value={password} onChange={(e) => setPassword(e.target.value)} required />
               </div>
               
               <button type="submit" className="btn-primary" disabled={loading}>
