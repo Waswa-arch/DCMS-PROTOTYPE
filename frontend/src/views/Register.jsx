@@ -6,7 +6,13 @@ export function Register() {
   const { register } = useAuth() || {};
   const navigate = useNavigate(); 
 
-  // Wizard Step Control
+  // Wizard Step Control — 2 steps: personal details, then password.
+  // Role selection was removed: the backend derives role exclusively from
+  // email domain (@kabarak.ac.ke -> STUDENT, @kabarak.edu.ke -> OFFICER)
+  // and has never honored a client-submitted role or department. Leaving
+  // that step in place let a user pick "Clearance Officer" or "Faculty"
+  // and be silently registered as something else with no explanation —
+  // a real UX-honesty problem, not just an unused screen.
   const [step, setStep] = useState(1);
 
   // Form Field States
@@ -14,8 +20,6 @@ export function Register() {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [regNumber, setRegNumber] = useState('');
-  const [role, setRole] = useState('Student'); 
-  const [department, setDepartment] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -28,19 +32,11 @@ export function Register() {
     e.preventDefault();
     setError('');
 
-    if (step === 1) {
-      if (!firstName || !lastName || !email || !regNumber) {
-        setError('Please fully populate all fields to proceed.');
-        return;
-      }
-      setStep(2);
-    } else if (step === 2) {
-      if (role !== 'Student' && !department) {
-        setError('Please select your assigned academic department.');
-        return;
-      }
-      setStep(3);
+    if (!firstName || !lastName || !email || !regNumber) {
+      setError('Please fully populate all fields to proceed.');
+      return;
     }
+    setStep(2);
   };
 
   const handleRegisterSubmit = async (e) => {
@@ -61,7 +57,7 @@ export function Register() {
       setLoading(true);
 
       if (register) {
-        await register({ firstName, lastName, email, regNumber, role, department, password });
+        await register({ firstName, lastName, email, regNumber, password });
       }
       
       setSuccess('Profile successfully cataloged! Redirecting to login...');
@@ -122,11 +118,6 @@ export function Register() {
         .dot.active { background: #0f6e56; width: 28px; }
         .dot.done { background: #1d9e75; }
         
-        .role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px; }
-        .role-pill { border: 1px solid #e2e0d8; border-radius: 9px; padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; color: #6b7280; transition: all 0.15s; background: #fff; text-align: left; }
-        .role-pill:hover { border-color: #0f6e56; color: #0f6e56; }
-        .role-pill.selected { border-color: #0f6e56; background: #e1f5ee; color: #0f6e56; }
-        
         .error-message { background: #fdf2f2; color: #9b1c1c; border: 1px solid #f8b4b4; padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; font-weight: 500; }
         .success-message { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; font-weight: 500; }
         .field-hint { font-size: 11px; color: #6b7280; margin-top: 5px; font-weight: 300; opacity: 0.7; text-align: left; }
@@ -144,7 +135,6 @@ export function Register() {
             <div className="brand-sub">Digital Clearance</div>
           </div>
           <div className="sidebar-quote">
-            {/* Principles of the identity script */}
             <blockquote>"Fear God and serve in excellence."</blockquote>
           </div>
           <div className="sidebar-footer">
@@ -164,13 +154,12 @@ export function Register() {
 
             <div className="step-dots">
               <div className={`dot ${step === 1 ? 'active' : 'done'}`}></div>
-              <div className={`dot ${step === 2 ? 'active' : step > 2 ? 'done' : ''}`}></div>
-              <div className={`dot ${step === 3 ? 'active' : ''}`}></div>
+              <div className={`dot ${step === 2 ? 'active' : ''}`}></div>
             </div>
 
             {step === 1 && (
               <form onSubmit={handleNextStep}>
-                <div className="auth-tag"><span></span>Step 1 of 3</div>
+                <div className="auth-tag"><span></span>Step 1 of 2</div>
                 <h1>Your details</h1>
                 <p className="auth-desc">Start with your basic personal information.</p>
                 <div className="field-row">
@@ -214,6 +203,7 @@ export function Register() {
                     autoComplete="email"
                     required 
                   />
+                  
                 </div>
                 <div className="field field-icon">
                   <label htmlFor="reg-id-num">Student / Staff ID</label>
@@ -239,62 +229,8 @@ export function Register() {
             )}
 
             {step === 2 && (
-              <form onSubmit={handleNextStep}>
-                <div className="auth-tag"><span></span>Step 2 of 3</div>
-                <h1>Your role</h1>
-                <p className="auth-desc">Select how you're using the clearance system.</p>
-                
-                <div className="role-grid">
-                  {['Student', 'Department', 'Clearance Officer', 'Faculty'].map((lbl) => (
-                    <div key={lbl} className={`role-pill ${role === lbl ? 'selected' : ''}`} onClick={() => setRole(lbl)}>
-                      <i className={
-                        lbl === 'Student' ? 'ti ti-user-graduate' :
-                        lbl === 'Department' ? 'ti ti-building' :
-                        lbl === 'Clearance Officer' ? 'ti ti-shield-check' : 'ti ti-school'
-                      }></i>
-                      {lbl}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="field">
-                  <label htmlFor="reg-department">Department / School</label>
-                  <select 
-                    id="reg-department"
-                    name="department"
-                    value={department} 
-                    onChange={(e) => setDepartment(e.target.value)} 
-                    required={role !== 'Student'}
-                  >
-                    <option value="" disabled>Select department</option>
-                    <option>School of Computing & Informatics</option>
-                    <option>School of Business</option>
-                    <option>School of Education</option>
-                    <option>School of Engineering</option>
-                    <option>School of Law</option>
-                    <option>School of Medicine</option>
-                    <option>School of Nursing</option>
-                    <option>Finance Office</option>
-                    <option>Library</option>
-                    <option>Accommodation</option>
-                  </select>
-                </div>
-
-                <button type="submit" className="btn-primary">
-                  <span>Continue</span>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: '16px', height: '16px' }}>
-                    <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
-                  </svg>
-                </button>
-                <div style={{ marginTop: '14px', textAlign: 'center' }}>
-                  <a onClick={() => setStep(1)} style={{ fontSize: '12px', color: '#6b7280', cursor: 'pointer', textDecoration: 'underline' }}>← Go back</a>
-                </div>
-              </form>
-            )}
-
-            {step === 3 && (
               <form onSubmit={handleRegisterSubmit}>
-                <div className="auth-tag"><span></span>Step 3 of 3</div>
+                <div className="auth-tag"><span></span>Step 2 of 2</div>
                 <h1>Set password</h1>
                 <p className="auth-desc">Choose a strong password to secure your account.</p>
                 
@@ -326,13 +262,11 @@ export function Register() {
                     required 
                   />
                 </div>
-
                 {password && confirmPassword && (
                   <div className="field-hint" style={{ marginTop: '-10px', marginBottom: '14px', color: password === confirmPassword && password.length >= 8 ? '#0f6e56' : '#c0392b' }}>
                     {password.length < 8 ? 'Password must be at least 8 characters' : password === confirmPassword ? 'Passwords match ✓' : 'Passwords do not match'}
                   </div>
                 )}
-
                 <button type="submit" className="btn-primary" disabled={loading}>
                   <span>{loading ? 'Creating Account...' : 'Create account'}</span>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: '16px', height: '16px' }}>
@@ -341,7 +275,7 @@ export function Register() {
                 </button>
                 
                 <div style={{ marginTop: '14px', textAlign: 'center' }}>
-                  <a onClick={() => setStep(2)} style={{ fontSize: '12px', color: '#6b7280', cursor: 'pointer', textDecoration: 'underline' }}>← Go back</a>
+                  <a onClick={() => setStep(1)} style={{ fontSize: '12px', color: '#6b7280', cursor: 'pointer', textDecoration: 'underline' }}>← Go back</a>
                 </div>
               </form>
             )}
@@ -351,5 +285,4 @@ export function Register() {
     </div>
   );
 }
-
 export default Register;
