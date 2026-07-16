@@ -14,6 +14,54 @@ async function resolveOfficerDepartmentId(user) {
 }
 
 /**
+ * Re-derives overall_status from the CURRENT state of every item on a
+ * request, rather than incrementally patching based on a single action.
+ * Shared by actionClearanceItem and resubmitClearanceItem so both paths
+ * stay in sync — a request can reach FLAGGED via an officer's action and
+ * leave it via either an officer reversing the flag OR a student
+ * resubmitting, and both need identical, correct recomputation logic.
+ * Caller is responsible for wrapping this in its own transaction.
+ */
+async function recalculateOverallStatus(requestId, studentId) {
+  const statusCounts = await db.all(
+    `SELECT status, COUNT(*) as cnt FROM dept_clearance_items WHERE request_id = ? GROUP BY status`,
+    [requestId]
+  );
+  const counts = { PENDING: 0, APPROVED: 0, FLAGGED: 0 };
+  statusCounts.forEach((row) => { counts[row.status] = row.cnt; });
+  const totalItems = counts.PENDING + counts.APPROVED + counts.FLAGGED;
+
+  let newOverallStatus;
+  if (counts.FLAGGED > 0) {
+    newOverallStatus = 'FLAGGED';
+  } else if (counts.APPROVED === totalItems) {
+    newOverallStatus = 'APPROVED';
+  } else {
+    newOverallStatus = 'ACTIVE';
+  }
+
+  const currentRequest = await db.get(
+    'SELECT overall_status FROM clearance_requests WHERE id = ?',
+    [requestId]
+  );
+
+  if (newOverallStatus !== currentRequest.overall_status) {
+    await db.run(
+      'UPDATE clearance_requests SET overall_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [newOverallStatus, requestId]
+    );
+    if (newOverallStatus === 'APPROVED') {
+      await db.run(
+        "INSERT INTO notifications (user_id, title, message) VALUES (?, 'Clearance Complete!', 'All departments have cleared your records.')",
+        [studentId]
+      );
+    }
+  }
+
+  return newOverallStatus;
+}
+
+/**
  * FETCH OR AUTO-INITIATE STUDENT CLEARANCE STATUS
  */
 export const getMyClearance = async (req, res) => {
@@ -191,47 +239,7 @@ export const actionClearanceItem = async (req, res) => {
       VALUES (?, ?, ?)
     `, [item.student_id, `Clearance Update: ${item.dept_name}`, `Status: ${status}. Remarks: ${remarks || 'None'}`]);
 
-    // Re-derive overall_status from the CURRENT state of every item, rather
-    // than incrementally patching based only on this one action. The old
-    // two-branch logic (all-approved -> APPROVED, this-action-was-FLAGGED ->
-    // FLAGGED) had no path back out of FLAGGED once set, so reversing a flag
-    // left overall_status permanently stuck even after the underlying item
-    // was corrected. Recomputing from scratch handles that and any future
-    // combination without needing a new special case each time.
-    const statusCounts = await db.all(
-      `SELECT status, COUNT(*) as cnt FROM dept_clearance_items WHERE request_id = ? GROUP BY status`,
-      [item.request_id]
-    );
-    const counts = { PENDING: 0, APPROVED: 0, FLAGGED: 0 };
-    statusCounts.forEach((row) => { counts[row.status] = row.cnt; });
-    const totalItems = counts.PENDING + counts.APPROVED + counts.FLAGGED;
-
-    let newOverallStatus;
-    if (counts.FLAGGED > 0) {
-      newOverallStatus = 'FLAGGED';
-    } else if (counts.APPROVED === totalItems) {
-      newOverallStatus = 'APPROVED';
-    } else {
-      newOverallStatus = 'ACTIVE';
-    }
-
-    const currentRequest = await db.get(
-      'SELECT overall_status FROM clearance_requests WHERE id = ?',
-      [item.request_id]
-    );
-
-    if (newOverallStatus !== currentRequest.overall_status) {
-      await db.run(
-        'UPDATE clearance_requests SET overall_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [newOverallStatus, item.request_id]
-      );
-      if (newOverallStatus === 'APPROVED') {
-        await db.run(
-          "INSERT INTO notifications (user_id, title, message) VALUES (?, 'Clearance Complete!', 'All departments have cleared your records.')",
-          [item.student_id]
-        );
-      }
-    }
+    await recalculateOverallStatus(item.request_id, item.student_id);
 
     await db.run('COMMIT');
     return res.status(200).json({ success: true, message: 'Status updated successfully.' });
@@ -239,6 +247,90 @@ export const actionClearanceItem = async (req, res) => {
   } catch (error) {
     await db.run('ROLLBACK').catch(() => {});
     console.error('Action Error:', error);
+    return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
+  }
+};
+
+/**
+ * STUDENT: RESUBMIT A FLAGGED ITEM
+ * Flips a FLAGGED item back to PENDING so it reappears in the responsible
+ * officer's queue. Only the student who owns the request may do this, and
+ * only for an item that is currently FLAGGED — resubmitting a PENDING or
+ * already-APPROVED item makes no sense and is rejected.
+ */
+export const resubmitClearanceItem = async (req, res) => {
+  const itemId = req.params.id;
+  const { remarks } = req.body;
+  const studentId = req.user.id;
+
+  try {
+    const item = await db.get(
+      `SELECT dci.*, d.name as dept_name, d.id as dept_id, cr.student_id, cr.id as request_id 
+       FROM dept_clearance_items dci 
+       JOIN departments d ON dci.department_id = d.id 
+       JOIN clearance_requests cr ON dci.request_id = cr.id 
+       WHERE dci.id = ?`,
+      [itemId]
+    );
+
+    if (!item) {
+      return res.status(404).json({ success: false, message: 'Item not found.' });
+    }
+
+    // SECURITY: a student may only resubmit their own item — checked
+    // against the clearance_requests row's student_id, not anything
+    // client-supplied, same pattern as the officer department check above.
+    if (item.student_id !== studentId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: this item does not belong to you.'
+      });
+    }
+
+    if (item.status !== 'FLAGGED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only a flagged item can be resubmitted.'
+      });
+    }
+
+    await db.run('BEGIN');
+
+    await db.run(`
+      UPDATE dept_clearance_items 
+      SET status = 'PENDING', remarks = ?, actioned_by_officer_id = NULL, actioned_at = NULL
+      WHERE id = ?
+    `, [remarks && remarks.trim() ? remarks.trim() : 'Resubmitted by student for re-review.', itemId]);
+
+    await db.run(`
+      INSERT INTO audit_log (actor_id, action_type, entity_affected, details)
+      VALUES (?, 'STUDENT_RESUBMISSION', 'dept_clearance_items', ?)
+    `, [studentId, `Student resubmitted item ID ${itemId} (${item.dept_name}) for re-review. Remarks: ${remarks || 'None'}`]);
+
+    // Notify whoever CURRENTLY owns this department — not the officer who
+    // originally flagged it, since a reassignment could have happened
+    // since then. Falls back to silently skipping notification if the
+    // department currently has no officer assigned (a known, separately
+    // tracked gap — see the zero-officer-department backlog item).
+    const currentOfficer = await db.get(
+      "SELECT id FROM users WHERE role = 'OFFICER' AND department_assigned_id = ?",
+      [item.dept_id]
+    );
+    if (currentOfficer) {
+      await db.run(`
+        INSERT INTO notifications (user_id, title, message)
+        VALUES (?, ?, ?)
+      `, [currentOfficer.id, `Resubmission: ${item.dept_name}`, `A student has resubmitted a previously flagged item for re-review.`]);
+    }
+
+    await recalculateOverallStatus(item.request_id, item.student_id);
+
+    await db.run('COMMIT');
+    return res.status(200).json({ success: true, message: 'Item resubmitted for re-review.' });
+
+  } catch (error) {
+    await db.run('ROLLBACK').catch(() => {});
+    console.error('Resubmission Error:', error);
     return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
   }
 };
