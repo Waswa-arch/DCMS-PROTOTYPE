@@ -18,6 +18,7 @@ const OfficerDashboard = () => {
   const [actioning, setActioning] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchStats = async () => {
     try {
@@ -97,6 +98,16 @@ const OfficerDashboard = () => {
 
   const queueLabel = statusFilter.charAt(0) + statusFilter.slice(1).toLowerCase();
 
+  const filteredQueue = queue.filter((item) => {
+  const term = searchTerm.trim().toLowerCase();
+  if (!term) return true;
+  return (
+    item.student_name?.toLowerCase().includes(term) ||
+    item.student_id_number?.toLowerCase().includes(term) ||
+    item.student_email?.toLowerCase().includes(term)
+  );
+});
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -152,28 +163,48 @@ const OfficerDashboard = () => {
         )}
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 border-b border-slate-200 px-4 py-3">
+          <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              {queueLabel} Items — {queue.length} {queue.length === 1 ? 'request' : 'requests'}
+              {queueLabel} Items — {filteredQueue.length} {filteredQueue.length === 1 ? 'request' : 'requests'}
             </h2>
+            <input
+              type="text"
+              placeholder="Search by name, ID, or email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="bg-white border border-slate-200 text-xs px-3 py-1.5 rounded-lg focus:outline-none focus:border-slate-400 w-full sm:w-64 transition-colors"
+            />
           </div>
 
           {loading ? (
             <div className="p-8 text-center text-slate-400 text-sm">
               Loading {queueLabel.toLowerCase()} items...
             </div>
-          ) : queue.length === 0 ? (
+          ) : filteredQueue.length === 0 ? (
             <div className="px-6 py-12 text-center">
-              <p className="text-sm font-medium text-slate-500">
-                No {queueLabel.toLowerCase()} clearance items in your department.
-              </p>
-              <p className="text-xs text-slate-400 mt-1">
-                Check back later or refresh the page.
-              </p>
+              {searchTerm.trim() ? (
+                <>
+                  <p className="text-sm font-medium text-slate-500">
+                    No {queueLabel.toLowerCase()} items match "{searchTerm.trim()}".
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Try a different name, ID, or email.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-slate-500">
+                    No {queueLabel.toLowerCase()} clearance items in your department.
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Check back later or refresh the page.
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {queue.map((item) => (
+              {filteredQueue.map((item) => (
                 <div
                   key={item.item_id}
                   className="p-4 flex flex-col lg:flex-row lg:items-start justify-between gap-4 hover:bg-slate-50/50 transition-colors"
