@@ -34,7 +34,7 @@ async function recalculateOverallStatus(requestId, studentId) {
   let newOverallStatus;
   if (counts.FLAGGED > 0) {
     newOverallStatus = 'FLAGGED';
-  } else if (counts.APPROVED === totalItems) {
+  } else if (totalItems > 0 && counts.APPROVED === totalItems) {
     newOverallStatus = 'APPROVED';
   } else {
     newOverallStatus = 'ACTIVE';
