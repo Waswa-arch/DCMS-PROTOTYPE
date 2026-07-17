@@ -137,7 +137,70 @@ export const getMyClearance = async (req, res) => {
 };
 
 /**
- * OFFICER: FETCH ALL PENDING ITEMS
+ * OFFICER: DEPARTMENT-SCOPED STATUS COUNTS
+ * Feeds the dashboard stat cards. Scoped to the officer's CURRENT
+ * department via resolveOfficerDepartmentId — same pattern as the queue
+ * and action endpoints — so a reassigned officer never sees stale counts.
+ */
+export const getOfficerStats = async (req, res) => {
+  try {
+    const officerDeptId = await resolveOfficerDepartmentId(req.user);
+
+    if (!officerDeptId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access Denied: Your profile is not bound to a department.'
+      });
+    }
+
+    const rows = await db.all(
+      `SELECT status, COUNT(*) as cnt 
+       FROM dept_clearance_items 
+       WHERE department_id = ? 
+       GROUP BY status`,
+      [officerDeptId]
+    );
+
+    const counts = { PENDING: 0, APPROVED: 0, FLAGGED: 0 };
+    rows.forEach((row) => { counts[row.status] = row.cnt; });
+
+    return res.status(200).json({ success: true, stats: counts });
+  } catch (error) {
+    console.error('Officer Stats Error:', error);
+    return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
+  }
+};
+
+/**
+ * OFFICER: OWN RECENT DECISION HISTORY
+ * Returns this officer's own last 20 approve/flag actions from audit_log,
+ * scoped to actor_id so an officer can only ever see their own history —
+ * distinct from AdminDashboard's audit viewer, which shows everyone's.
+ */
+export const getOfficerHistory = async (req, res) => {
+  try {
+    const history = await db.all(
+      `SELECT id, action_type, entity_affected, details, created_at
+       FROM audit_log
+       WHERE actor_id = ? AND action_type = 'DEPARTMENTAL_DECISION'
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [req.user.id]
+    );
+
+    return res.status(200).json({ success: true, history });
+  } catch (error) {
+    console.error('Officer History Error:', error);
+    return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
+  }
+};
+
+/**
+ * OFFICER: FETCH CLEARANCE ITEMS FILTERED BY STATUS (defaults to PENDING)
+ * Accepts an optional ?status= query param (PENDING | APPROVED | FLAGGED)
+ * so the dashboard's stat cards can double as filters — e.g. clicking the
+ * Flagged card actually surfaces those items instead of them being
+ * reachable only through direct item-ID knowledge.
  */
 export const getOfficerQueue = async (req, res) => {
   try {
@@ -150,22 +213,27 @@ export const getOfficerQueue = async (req, res) => {
       });
     }
 
+    const { status } = req.query;
+    const validStatuses = ['PENDING', 'APPROVED', 'FLAGGED'];
+    const filterStatus = validStatuses.includes(status) ? status : 'PENDING';
+
     const queue = await db.all(`
       SELECT 
         dci.id as item_id,
         dci.status,
         dci.remarks,
+        dci.actioned_at,
         u.name as student_name,
         u.id_number as student_id_number,
         u.email as student_email
       FROM dept_clearance_items dci
       JOIN clearance_requests cr ON dci.request_id = cr.id
       JOIN users u ON cr.student_id = u.id
-      WHERE dci.department_id = ? AND dci.status = 'PENDING'
+      WHERE dci.department_id = ? AND dci.status = ?
       ORDER BY cr.created_at ASC
-    `, [officerDeptId]);
+    `, [officerDeptId, filterStatus]);
 
-    return res.status(200).json({ success: true, queue });
+    return res.status(200).json({ success: true, queue, filter: filterStatus });
   } catch (error) {
     console.error('Officer Queue Error:', error);
     return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
