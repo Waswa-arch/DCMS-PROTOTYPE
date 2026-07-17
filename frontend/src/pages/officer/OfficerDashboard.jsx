@@ -96,6 +96,13 @@ const OfficerDashboard = () => {
     setRemarks((prev) => ({ ...prev, [id]: value }));
   };
 
+  const getDaysWaiting = (createdAt) => {
+  if (!createdAt) return null;
+  const created = new Date(createdAt.replace(' ', 'T'));
+  const diffMs = Date.now() - created.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+};
+
   const queueLabel = statusFilter.charAt(0) + statusFilter.slice(1).toLowerCase();
 
   const filteredQueue = queue.filter((item) => {
@@ -210,9 +217,28 @@ const OfficerDashboard = () => {
                   className="p-4 flex flex-col lg:flex-row lg:items-start justify-between gap-4 hover:bg-slate-50/50 transition-colors"
                 >
                   <div className="space-y-1 min-w-0">
-                    <div className="text-sm font-bold text-slate-800">
-                      {item.student_name}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="text-sm font-bold text-slate-800">
+                        {item.student_name}
+                      </div>
+                      {item.status === 'PENDING' && (() => {
+                        const days = getDaysWaiting(item.request_created_at);
+                        if (days === null) return null;
+                        const isStale = days >= 3;
+                        return (
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              isStale
+                                ? 'bg-rose-100 text-rose-600'
+                                : 'bg-slate-100 text-slate-500'
+                            }`}
+                          >
+                            {days === 0 ? 'Today' : days === 1 ? '1 day waiting' : `${days} days waiting`}
+                          </span>
+                        );
+                      })()}
                     </div>
+
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                       <span className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
                         {item.student_id_number}

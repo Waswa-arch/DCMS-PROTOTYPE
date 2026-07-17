@@ -223,6 +223,7 @@ export const getOfficerQueue = async (req, res) => {
         dci.status,
         dci.remarks,
         dci.actioned_at,
+        cr.created_at as request_created_at,
         u.name as student_name,
         u.id_number as student_id_number,
         u.email as student_email
