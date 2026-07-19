@@ -1,7 +1,3 @@
-node_modules/
-.vite/
-.env
-*.sqlite
 # Dependencies
 node_modules/
 frontend/node_modules/
@@ -15,6 +11,13 @@ frontend/node_modules/
 *.sqlite3
 database.sqlite
 
+# Accidental shell-redirect output (e.g. `git log > file.txt`, `npm run x > out.txt`)
+# This is the exact category that caused the accidental commit_history.txt commit.
+*.log
+commit_history.txt
+*.txt
+!README.txt
+
 # System Overlays
 .DS_Store
-dist/
+dist/s
