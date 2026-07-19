@@ -1,3 +1,4 @@
+import ProfilePage from './pages/shared/ProfilePage';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute } from './routes/ProtectedRoute';
@@ -17,11 +18,7 @@ const DashboardOrchestrator = () => {
   return <Navigate to="/login" replace />;
 };
 
-const ProfilePage = () => (
-  <div className="p-8 text-center text-slate-400 text-sm">
-    Profile settings coming soon.
-  </div>
-);
+
 
 function App() {
   return (
