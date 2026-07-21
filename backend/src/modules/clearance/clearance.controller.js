@@ -196,6 +196,53 @@ export const getOfficerHistory = async (req, res) => {
 };
 
 /**
+ * ADMIN + ACADEMIC REGISTRAR OFFICER ONLY: LIST FULLY-APPROVED STUDENTS
+ * Cross-department view — students whose overall_status is APPROVED (every
+ * department cleared). ADMIN always has access. An OFFICER only has access
+ * if their CURRENT department (resolved fresh from DB, not JWT — same
+ * pattern as resolveOfficerDepartmentId) is "Office of the Academic
+ * Registrar". Every other officer role is rejected with 403; they use
+ * their own department-scoped Approved tab (getOfficerQueue) instead.
+ */
+export const getApprovedStudents = async (req, res) => {
+  try {
+    if (req.user.role === 'OFFICER') {
+      const dept = await db.get(
+        `SELECT d.name FROM users u 
+         JOIN departments d ON u.department_assigned_id = d.id 
+         WHERE u.id = ?`,
+        [req.user.id]
+      );
+
+      if (!dept || dept.name !== 'Office of the Academic Registrar') {
+        return res.status(403).json({
+          success: false,
+          message: 'Access Denied: This view is limited to the Academic Registrar and administrators.'
+        });
+      }
+    }
+
+    const students = await db.all(`
+      SELECT 
+        u.id as student_id,
+        u.name as student_name,
+        u.id_number as student_id_number,
+        u.email as student_email,
+        cr.updated_at as cleared_at
+      FROM clearance_requests cr
+      JOIN users u ON cr.student_id = u.id
+      WHERE cr.overall_status = 'APPROVED'
+      ORDER BY cr.updated_at DESC
+    `);
+
+    return res.status(200).json({ success: true, students });
+  } catch (error) {
+    console.error('Approved Students Error:', error);
+    return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
+  }
+};
+
+/**
  * OFFICER: FETCH CLEARANCE ITEMS FILTERED BY STATUS (defaults to PENDING)
  * Accepts an optional ?status= query param (PENDING | APPROVED | FLAGGED)
  * so the dashboard's stat cards can double as filters — e.g. clicking the

@@ -18,6 +18,7 @@ const OfficerDashboard = () => {
   const [actioning, setActioning] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [approvedStudents, setApprovedStudents] = useState(null); // null = not yet loaded or not authorized
   const [searchTerm, setSearchTerm] = useState('');
 
   const fetchStats = async () => {
@@ -35,6 +36,16 @@ const OfficerDashboard = () => {
       setHistory(data.history || []);
     } catch (err) {
       // Non-fatal: section just shows empty/stale if this fails
+    }
+  };
+
+  const fetchApprovedStudents = async () => {
+    try {
+      const { data } = await api.get('/clearance/approved-students');
+      setApprovedStudents(data.students || []);
+    } catch (err) {
+      // 403 means this officer isn't Academic Registrar — section just stays hidden, not an error
+      setApprovedStudents(null);
     }
   };
 
@@ -58,6 +69,7 @@ const OfficerDashboard = () => {
   useEffect(() => {
     fetchStats();
     fetchHistory();
+    fetchApprovedStudents();
   }, []);
 
   useEffect(() => {
@@ -97,23 +109,23 @@ const OfficerDashboard = () => {
   };
 
   const getDaysWaiting = (createdAt) => {
-  if (!createdAt) return null;
-  const created = new Date(createdAt.replace(' ', 'T'));
-  const diffMs = Date.now() - created.getTime();
-  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
-};
+    if (!createdAt) return null;
+    const created = new Date(createdAt.replace(' ', 'T'));
+    const diffMs = Date.now() - created.getTime();
+    return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  };
 
   const queueLabel = statusFilter.charAt(0) + statusFilter.slice(1).toLowerCase();
 
   const filteredQueue = queue.filter((item) => {
-  const term = searchTerm.trim().toLowerCase();
-  if (!term) return true;
-  return (
-    item.student_name?.toLowerCase().includes(term) ||
-    item.student_id_number?.toLowerCase().includes(term) ||
-    item.student_email?.toLowerCase().includes(term)
-  );
-});
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return true;
+    return (
+      item.student_name?.toLowerCase().includes(term) ||
+      item.student_id_number?.toLowerCase().includes(term) ||
+      item.student_email?.toLowerCase().includes(term)
+    );
+  });
 
   return (
     <DashboardLayout>
@@ -353,6 +365,46 @@ const OfficerDashboard = () => {
             )
           )}
         </div>
+
+        {/* FULLY-APPROVED STUDENTS — cross-department view, only rendered if
+            the backend actually returned data. A 403 (any officer who isn't
+            Academic Registrar) leaves approvedStudents as null, and this
+            section simply doesn't render — no error shown, no explanation
+            needed, since most officers should never know this view exists. */}
+        {approvedStudents !== null && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-slate-50 border-b border-slate-200 px-4 py-3">
+              <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Fully Cleared Students — {approvedStudents.length} {approvedStudents.length === 1 ? 'student' : 'students'}
+              </h2>
+            </div>
+
+            {approvedStudents.length === 0 ? (
+              <div className="px-6 py-8 text-center text-xs text-slate-400">
+                No students have completed clearance across all departments yet.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {approvedStudents.map((student) => (
+                  <div key={student.student_id} className="px-4 py-3 flex items-center justify-between gap-4">
+                    <div>
+                      <div className="text-sm font-bold text-slate-800">{student.student_name}</div>
+                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
+                        <span className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                          {student.student_id_number}
+                        </span>
+                        <span>{student.student_email}</span>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
+                      {new Date(student.cleared_at.replace(' ', 'T')).toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

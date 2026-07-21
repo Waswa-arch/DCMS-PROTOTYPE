@@ -11,6 +11,7 @@ import {
   Flag,
   Clock,
   ShieldCheck,
+  GraduationCap,
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -18,25 +19,30 @@ export default function AdminDashboard() {
   const [departments, setDepartments] = useState([]);
   const [stats, setStats] = useState(null);
   const [recentAudit, setRecentAudit] = useState([]);
+  const [approvedStudents, setApprovedStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(null);
   const [feedback, setFeedback] = useState({});
   const [pendingChanges, setPendingChanges] = useState({});
+  const [approvedStudentsOpen, setApprovedStudentsOpen] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
-      const [officersRes, deptsRes, statsRes] = await Promise.all([
+      const [officersRes, deptsRes, statsRes, approvedRes] = await Promise.all([
         api.get('/admin/officers'),
         api.get('/admin/departments'),
         api.get('/admin/stats'),
+        api.get('/clearance/approved-students'),
       ]);
       setOfficers(officersRes.data.officers || []);
       setDepartments(deptsRes.data.departments || []);
       setStats(statsRes.data.stats || null);
       setRecentAudit(statsRes.data.recent_audit || []);
+      setApprovedStudents(approvedRes.data.students || []);
     } catch (err) {
       setError('Failed to load admin data. Is the backend running?');
     } finally {
@@ -322,63 +328,129 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* AUDIT LOG VIEWER — real data from GET /api/admin/stats.recent_audit */}
+        {/* FULLY-APPROVED STUDENTS — real data from GET /clearance/approved-students.
+            Admin always has access (no 403 possible), unlike the same endpoint
+            on OfficerDashboard.jsx where only the Academic Registrar officer
+            can see it. Cross-department: every listed student has cleared
+            ALL departments, not just one. Collapsible so a growing list
+            doesn't force scrolling past it to reach the audit log below. */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center gap-2">
-            <Clock className="h-3.5 w-3.5 text-slate-400" />
-            <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Recent Audit Activity
-            </h2>
-          </div>
-
-          {recentAudit.length === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-400">
-              No audit activity recorded yet.
+          <button
+            onClick={() => setApprovedStudentsOpen((prev) => !prev)}
+            className="w-full bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-2 hover:bg-slate-100 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <GraduationCap className="h-3.5 w-3.5 text-slate-400" />
+              <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Fully Cleared Students — {approvedStudents.length} {approvedStudents.length === 1 ? 'student' : 'students'}
+              </h2>
             </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {recentAudit.map((entry) => {
-                const isOverride = entry.actor_role === 'ADMIN';
-                return (
+            <span className="text-xs text-slate-400">
+              {approvedStudentsOpen ? 'Hide ▲' : 'Show ▼'}
+            </span>
+          </button>
+
+          {approvedStudentsOpen && (
+            approvedStudents.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400">
+                No students have completed clearance across all departments yet.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {approvedStudents.map((student) => (
                   <div
-                    key={entry.id}
-                    className="p-4 flex items-start gap-3 hover:bg-slate-50/50 transition-colors"
+                    key={student.student_id}
+                    className="px-4 py-3 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors"
                   >
-                    <div
-                      className={`mt-0.5 flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center ${
-                        isOverride ? 'bg-violet-100 text-violet-600' : 'bg-slate-100 text-slate-500'
-                      }`}
-                      title={isOverride ? 'Admin override' : 'Officer action'}
-                    >
-                      {isOverride ? (
-                        <ShieldCheck className="h-3.5 w-3.5" />
-                      ) : (
-                        <Users className="h-3.5 w-3.5" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="text-xs font-bold text-slate-800">
-                          {entry.actor_name || 'Unknown actor'}
+                    <div>
+                      <div className="text-sm font-bold text-slate-800">{student.student_name}</div>
+                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
+                        <span className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                          {student.student_id_number}
                         </span>
-                        {isOverride && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded">
-                            Admin Override
-                          </span>
-                        )}
-                        <span className="text-[10px] font-mono text-slate-400 uppercase">
-                          {entry.action_type}
-                        </span>
+                        <span>{student.student_email}</span>
                       </div>
-                      <p className="text-xs text-slate-500 mt-0.5">{entry.details}</p>
-                      <p className="text-[10px] text-slate-400 mt-1 font-mono">
-                        {formatTimestamp(entry.created_at)}
-                      </p>
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
+                      {formatTimestamp(student.cleared_at)}
                     </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
+            )
+          )}
+        </div>
+
+        {/* AUDIT LOG VIEWER — real data from GET /api/admin/stats.recent_audit.
+            Collapsible for the same reason as the section above: a growing
+            audit trail shouldn't force scrolling to reach it or push other
+            content down by default. */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <button
+            onClick={() => setAuditOpen((prev) => !prev)}
+            className="w-full bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-2 hover:bg-slate-100 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Clock className="h-3.5 w-3.5 text-slate-400" />
+              <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Recent Audit Activity — {recentAudit.length} {recentAudit.length === 1 ? 'entry' : 'entries'}
+              </h2>
             </div>
+            <span className="text-xs text-slate-400">
+              {auditOpen ? 'Hide ▲' : 'Show ▼'}
+            </span>
+          </button>
+
+          {auditOpen && (
+            recentAudit.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400">
+                No audit activity recorded yet.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {recentAudit.map((entry) => {
+                  const isOverride = entry.actor_role === 'ADMIN';
+                  return (
+                    <div
+                      key={entry.id}
+                      className="p-4 flex items-start gap-3 hover:bg-slate-50/50 transition-colors"
+                    >
+                      <div
+                        className={`mt-0.5 flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center ${
+                          isOverride ? 'bg-violet-100 text-violet-600' : 'bg-slate-100 text-slate-500'
+                        }`}
+                        title={isOverride ? 'Admin override' : 'Officer action'}
+                      >
+                        {isOverride ? (
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                        ) : (
+                          <Users className="h-3.5 w-3.5" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="text-xs font-bold text-slate-800">
+                            {entry.actor_name || 'Unknown actor'}
+                          </span>
+                          {isOverride && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded">
+                              Admin Override
+                            </span>
+                          )}
+                          <span className="text-[10px] font-mono text-slate-400 uppercase">
+                            {entry.action_type}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">{entry.details}</p>
+                        <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                          {formatTimestamp(entry.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
           )}
         </div>
       </div>
