@@ -20,4 +20,4 @@ commit_history.txt
 
 # System Overlays
 .DS_Store
-dist/s
+dist
