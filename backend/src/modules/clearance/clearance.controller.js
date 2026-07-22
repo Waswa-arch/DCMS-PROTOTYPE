@@ -337,6 +337,51 @@ export const actionClearanceItem = async (req, res) => {
       }
     }
 
+    // SECURITY: an OFFICER may only action items in their own department.
+    // ADMIN bypasses this. Department is resolved fresh from DB, not JWT.
+    if (req.user.role === 'OFFICER') {
+      const currentDeptId = await resolveOfficerDepartmentId(req.user);
+      if (item.department_id !== currentDeptId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden: this item does not belong to your department.'
+        });
+      }
+    }
+
+    // BUSINESS RULE: the department with the highest sequence_order (the
+    // Academic Registrar, seeded last) may only approve once every other
+    // department on this request has already cleared. This makes Academic
+    // Registrar's approval genuinely mean "everything else is done" rather
+    // than just one more independent checkbox. Only applies to APPROVED
+    // actions — flagging is always allowed regardless of order, since
+    // catching a problem should never be blocked by sequencing.
+    if (status === 'APPROVED') {
+      const deptInfo = await db.get(
+        'SELECT sequence_order FROM departments WHERE id = ?',
+        [item.department_id]
+      );
+      const maxSeq = await db.get('SELECT MAX(sequence_order) as max_seq FROM departments');
+
+      if (deptInfo && maxSeq && deptInfo.sequence_order === maxSeq.max_seq) {
+        const otherItems = await db.all(
+          `SELECT dci.status FROM dept_clearance_items dci
+           WHERE dci.request_id = ? AND dci.department_id != ?`,
+          [item.request_id, item.department_id]
+        );
+        const allOthersApproved = otherItems.every((i) => i.status === 'APPROVED');
+
+        if (!allOthersApproved) {
+          return res.status(409).json({
+            success: false,
+            message: 'Cannot approve: all other departments must clear this student first.'
+          });
+        }
+      }
+    }
+
+  
+
     await db.run('BEGIN');
 
     await db.run(`
