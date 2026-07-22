@@ -63,6 +63,28 @@ export const reassignOfficerDepartment = async (req, res) => {
       INSERT INTO audit_log (actor_id, action_type, entity_affected, details)
       VALUES (?, 'OFFICER_DEPARTMENT_REASSIGNMENT', 'users', ?)
     `, [adminId, `Reassigned officer "${officer.name}" (ID ${officer.id}) from department ${officer.department_assigned_id ?? 'NONE'} to "${department.name}" (ID ${department.id}).`]);
+
+    // SAFETY CHECK: if the officer's OLD department now has zero officers
+    // left, warn the admin immediately. A department with no officer means
+    // every student's clearance item there is permanently stuck PENDING
+    // with nobody able to act on it — this already happened once for real
+    // and was only caught by accident. Only checked if they actually HAD an
+    // old department (won't fire on an officer's very first assignment).
+    if (officer.department_assigned_id) {
+      const remaining = await db.get(
+        "SELECT COUNT(*) as count FROM users WHERE role = 'OFFICER' AND department_assigned_id = ?",
+        [officer.department_assigned_id]
+      );
+
+      if (remaining.count === 0) {
+        const oldDept = await db.get('SELECT name FROM departments WHERE id = ?', [officer.department_assigned_id]);
+        await db.run(`
+          INSERT INTO notifications (user_id, title, message)
+          VALUES (?, 'Department Has No Officer', ?)
+        `, [adminId, `"${oldDept?.name || 'A department'}" now has zero officers assigned, following the reassignment of ${officer.name}. Students awaiting clearance from this department cannot be processed until an officer is assigned.`]);
+      }
+    }
+
     await db.run('COMMIT');
 
     return res.status(200).json({
