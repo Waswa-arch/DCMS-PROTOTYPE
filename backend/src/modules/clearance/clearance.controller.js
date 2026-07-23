@@ -13,6 +13,37 @@ async function resolveOfficerDepartmentId(user) {
   return row?.department_assigned_id ?? null;
 }
 
+
+/**
+ * Maps a student's registration number prefix to a school_code.
+ * Case-insensitive, matches the leading letter sequence only (e.g.
+ * "INTE-100" and "INTE/MK/1274/09/23" both correctly extract "INTE").
+ * Returns null for any prefix not in the table — including test/placeholder
+ * IDs like "STU001" — which is intentional: a student whose ID doesn't
+ * match a known school simply gets no school-specific department, not an
+ * error. Real, unmapped programs can be added to this table later without
+ * touching any other logic.
+ */
+const SCHOOL_PREFIX_MAP = {
+  EDU: 'EDU',
+  INTE: 'SET',
+  CS: 'SET',
+  BBIT: 'SET',
+  CLM: 'MED',
+  PHAM: 'MED',
+  HOSP: 'HOSP',
+  MUSC: 'MUSIC_COMM',
+  MSC: 'MUSIC_COMM',
+  KLAW: 'LAW',
+};
+
+function resolveSchoolCode(idNumber) {
+  if (!idNumber) return null;
+  const match = idNumber.toUpperCase().match(/^([A-Z]+)/);
+  if (!match) return null;
+  return SCHOOL_PREFIX_MAP[match[1]] || null;
+}
+
 /**
  * Re-derives overall_status from the CURRENT state of every item on a
  * request, rather than incrementally patching based on a single action.
@@ -90,7 +121,17 @@ export const getMyClearance = async (req, res) => {
         );
 
         if (!existingItems) {
-          const departments = await db.all('SELECT id FROM departments ORDER BY sequence_order ASC');
+          // Universal departments apply to every student. The ONE matching
+          // school department (based on the student's id_number prefix) is
+          // added on top — if no prefix matches (test IDs, unmapped
+          // programs), the student simply gets universal-only, no error.
+          const schoolCode = resolveSchoolCode(req.user.id_number);
+          const departments = await db.all(
+            `SELECT id FROM departments 
+             WHERE department_type = 'UNIVERSAL' OR school_code = ? 
+             ORDER BY sequence_order ASC`,
+            [schoolCode || '__NO_MATCH__']
+          );
           for (const dept of departments) {
             await db.run(
               "INSERT OR IGNORE INTO dept_clearance_items (request_id, department_id, status, remarks) VALUES (?, ?, 'PENDING', 'Awaiting administrative review.')",

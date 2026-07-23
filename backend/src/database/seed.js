@@ -27,6 +27,55 @@ export async function runSeeds() {
       console.log(' -> Departments seeded.');
     }
 
+    // ADDITIVE SEEDING: school-specific + one new universal department,
+    // layered on top of an already-existing installation. Uses
+    // INSERT OR IGNORE (departments.name is UNIQUE) so this is safe to run
+    // on every boot, including after a crash mid-way through — nextOrder is
+    // computed from the actual current max, not hardcoded, so a partial
+    // prior run can't cause a sequence_order collision on retry.
+    const newDepartments = [
+      { name: 'Medical Centre', type: 'UNIVERSAL', school_code: null },
+      { name: 'School of Education', type: 'SCHOOL', school_code: 'EDU' },
+      { name: 'School of Science, Engineering and Technology', type: 'SCHOOL', school_code: 'SET' },
+      { name: 'School of Medicine', type: 'SCHOOL', school_code: 'MED' },
+      { name: 'School of Hospitality', type: 'SCHOOL', school_code: 'HOSP' },
+      { name: 'School of Music and Communication', type: 'SCHOOL', school_code: 'MUSIC_COMM' },
+      { name: 'School of Law', type: 'SCHOOL', school_code: 'LAW' },
+    ];
+
+    const existingCount = await db.get(
+      `SELECT COUNT(*) as count FROM departments WHERE name IN (${newDepartments.map(() => '?').join(',')})`,
+      newDepartments.map((d) => d.name)
+    );
+
+    if (existingCount.count < newDepartments.length) {
+      console.log('[Seeder Engine] Seeding school & universal department extensions...');
+
+      // Academic Registrar must always hold the HIGHEST sequence_order
+      // (enforced by the last-department business rule) — temporarily move
+      // it out of the way so the new departments can claim ordering space.
+      await db.run("UPDATE departments SET sequence_order = 9999 WHERE name = 'Office of the Academic Registrar'");
+
+      const maxOrderRow = await db.get(
+        "SELECT MAX(sequence_order) as max_order FROM departments WHERE name != 'Office of the Academic Registrar'"
+      );
+      let nextOrder = (maxOrderRow.max_order || 0) + 1;
+
+      for (const dept of newDepartments) {
+        await db.run(
+          'INSERT OR IGNORE INTO departments (name, sequence_order, department_type, school_code) VALUES (?, ?, ?, ?)',
+          [dept.name, nextOrder, dept.type, dept.school_code]
+        );
+        nextOrder += 1;
+      }
+
+      await db.run(
+        'UPDATE departments SET sequence_order = ? WHERE name = ?',
+        [nextOrder, 'Office of the Academic Registrar']
+      );
+      console.log(' -> School & universal department extensions seeded.');
+    }
+
     const adminCheck = await db.get("SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1");
     if (!adminCheck) {
       console.log('[Seeder Engine] Seeding administrator account...');
