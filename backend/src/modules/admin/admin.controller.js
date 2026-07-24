@@ -3,7 +3,7 @@ import { db } from '../../config/db.js';
 export const listDepartments = async (req, res) => {
   try {
     const departments = await db.all(
-      'SELECT id, name, sequence_order FROM departments ORDER BY sequence_order ASC'
+      'SELECT id, name, sequence_order, department_type, school_code, officer_code FROM departments ORDER BY sequence_order ASC'
     );
     return res.status(200).json({ success: true, departments });
   } catch (error) {

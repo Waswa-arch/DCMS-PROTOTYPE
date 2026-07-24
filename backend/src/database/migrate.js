@@ -33,6 +33,8 @@ export async function runMigrations() {
     // retroactively add to an already-existing departments table.
     await ensureColumn('departments', 'department_type', "TEXT CHECK(department_type IN ('UNIVERSAL', 'SCHOOL')) NOT NULL DEFAULT 'UNIVERSAL'");
     await ensureColumn('departments', 'school_code', 'TEXT NULL');
+    await ensureColumn('departments', 'officer_code', 'TEXT NULL');
+    await db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_departments_officer_code ON departments(officer_code)');
 
     console.log('\x1b[32m%s\x1b[0m', '✅ [Migration Engine] Schema migration successfully compiled.');
   } catch (error) {

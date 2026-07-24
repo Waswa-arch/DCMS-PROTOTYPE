@@ -22,16 +22,28 @@ export const register = async (req, res) => {
   if (email.endsWith('@kabarak.edu.ke')) {
     role = 'OFFICER';
     try {
-      const defaultDept = await db.get('SELECT id FROM departments ORDER BY sequence_order ASC LIMIT 1');
-      
-      if (!defaultDept) {
-        console.error('CRITICAL: Registration blocked. Departments table empty.');
-        return res.status(503).json({ 
-          success: false, 
-          message: 'System configuration error. Contact administrator.' 
+      // Officer's department is derived from a code in their staff ID
+      // (e.g. "LIB/STAFF/001" -> LIB -> Library Services), not freely
+      // chosen. This makes an officer's department assignment structural,
+      // not just an admin's initial pick — the admin reassignment endpoint
+      // still exists for genuine emergencies (see zero-officer-department
+      // warning), but normal registration is now permanently tied to the
+      // real department the staff ID represents.
+      const prefixMatch = id_number.toUpperCase().match(/^([A-Z]+)/);
+      const officerCode = prefixMatch ? prefixMatch[1] : null;
+
+      const matchedDept = officerCode
+        ? await db.get('SELECT id FROM departments WHERE officer_code = ?', [officerCode])
+        : null;
+
+      if (!matchedDept) {
+        return res.status(400).json({
+          success: false,
+          message: 'Staff ID does not match any recognized department code. Contact administrator if you believe this is an error.'
         });
       }
-      department_assigned_id = defaultDept.id;
+
+      department_assigned_id = matchedDept.id;
     } catch (err) {
       console.error('Database Error during department lookup:', err);
       return res.status(500).json({ success: false, message: 'Internal server error.' });

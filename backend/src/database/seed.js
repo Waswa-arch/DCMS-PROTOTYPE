@@ -76,6 +76,29 @@ export async function runSeeds() {
       console.log(' -> School & universal department extensions seeded.');
     }
 
+    // Populate officer_code for all 13 departments. UPDATE is safe to run
+    // every boot — setting the same value repeatedly is a no-op, so this
+    // doesn't need an existence check like the INSERT blocks above.
+    const officerCodeMap = {
+      'Library Services': 'LIB',
+      'Sports & Athletics Division': 'SPT',
+      'Student Affairs Directorate': 'SAD',
+      'University Hostels & Housing': 'HST',
+      'Finance & Accounts Bureau': 'FIN',
+      'Office of the Academic Registrar': 'REG',
+      'Medical Centre': 'MED',
+      'School of Education': 'EDU',
+      'School of Science, Engineering and Technology': 'SET',
+      'School of Medicine': 'SOM',
+      'School of Hospitality': 'HOSP',
+      'School of Music and Communication': 'MUSC',
+      'School of Law': 'LAW',
+    };
+
+    for (const [name, code] of Object.entries(officerCodeMap)) {
+      await db.run('UPDATE departments SET officer_code = ? WHERE name = ?', [code, name]);
+    }
+
     const adminCheck = await db.get("SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1");
     if (!adminCheck) {
       console.log('[Seeder Engine] Seeding administrator account...');
