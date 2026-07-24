@@ -261,9 +261,9 @@ export function Login() {
               <p className="auth-desc">Access your clearance records and track your application status.</p>
 
               <div className="field field-icon">
-                <label htmlFor="login-email">University email</label>
+                <label htmlFor="login-email">Email or Staff/Student ID</label>
                 <i className="ti ti-mail"></i>
-                <input id="login-email" name="email" type="email" autoComplete="username" placeholder="username@kabarak.ac.ke" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <input id="login-email" name="email" type="text" autoComplete="username" placeholder="username@kabarak.ac.ke or your ID number" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
               <div className="field field-icon">
                 <label htmlFor="login-password">Password</label>

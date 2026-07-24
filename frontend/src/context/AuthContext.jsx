@@ -60,14 +60,14 @@ export const AuthProvider = ({ children }) => {
     try {
       const cleanedIdentifier = idNumberOrEmail.trim();
 
+      // "identifier" matches the backend's field name — it accepts EITHER
+      // an ID number or an email, matched against both columns server-side.
+      // The old conditional email-field logic here was dead code: the
+      // backend never read a separate "email" field, only "id_number".
       const payload = {
-        id_number: cleanedIdentifier,
+        identifier: cleanedIdentifier,
         password: password
       };
-
-      if (cleanedIdentifier.includes('@')) {
-        payload.email = cleanedIdentifier.toLowerCase();
-      }
 
       const response = await api.post('/auth/login', payload);
       const { token, user: authenticatedUser } = response.data;

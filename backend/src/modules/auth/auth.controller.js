@@ -96,18 +96,26 @@ export const register = async (req, res) => {
  * SECURE USER LOGIN
  */
 export const login = async (req, res) => {
-  const { id_number, password } = req.body;
+  // "identifier" because this accepts EITHER an ID number OR an email —
+  // matched against both columns below. Previously named "id_number",
+  // which caused real confusion during testing when someone sent an email
+  // and got a generic "required" error, not realizing the field's actual
+  // name didn't reflect what it accepts.
+  const { identifier, password } = req.body;
 
-  if (!id_number || !password) {
+  if (!identifier || !password) {
     return res.status(400).json({ success: false, message: 'ID Number/Email and Password are required.' });
   }
 
-  const cleanInput = id_number.trim().toLowerCase();
+  const cleanInput = identifier.trim().toLowerCase();
 
   try {
     const user = await db.get(
-      'SELECT * FROM users WHERE LOWER(id_number) = ? OR LOWER(email) = ?', 
-      [cleanInput, cleanInput] 
+      `SELECT u.*, d.name as department_name 
+       FROM users u 
+       LEFT JOIN departments d ON u.department_assigned_id = d.id 
+       WHERE LOWER(u.id_number) = ? OR LOWER(u.email) = ?`,
+      [cleanInput, cleanInput]
     );
     
     if (!user) {
@@ -141,7 +149,8 @@ export const login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        department_assigned_id: user.department_assigned_id
+        department_assigned_id: user.department_assigned_id,
+        department_name: user.department_name || null
       }
     });
   } catch (error) {

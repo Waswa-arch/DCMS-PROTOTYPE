@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
+import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../layouts/DashboardLayout';
 
 const STAT_CARDS = [
@@ -9,6 +10,7 @@ const STAT_CARDS = [
 ];
 
 const OfficerDashboard = () => {
+  const { user } = useAuth();
   const [queue, setQueue] = useState([]);
   const [stats, setStats] = useState({ PENDING: 0, APPROVED: 0, FLAGGED: 0 });
   const [statusFilter, setStatusFilter] = useState('PENDING');
@@ -130,6 +132,21 @@ const OfficerDashboard = () => {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {/* OFFICER IDENTITY BANNER — confirms at a glance who's logged in
+            and which department they're acting for, before any action is
+            taken. Sourced from the login response (user.department_name),
+            not a separate fetch. */}
+        <div className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
+          <div className="h-10 w-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-black flex-shrink-0">
+            {user?.name ? user.name.charAt(0).toUpperCase() : 'O'}
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-slate-800 truncate">{user?.name}</div>
+            <div className="text-xs text-slate-500 truncate">
+              {user?.id_number}{user?.department_name ? ` · ${user.department_name}` : ''}
+            </div>
+          </div>
+        </div>
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div>
             <h1 className="text-xl font-bold text-slate-800 tracking-tight">

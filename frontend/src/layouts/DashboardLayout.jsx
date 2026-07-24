@@ -202,7 +202,9 @@ const DashboardLayout = ({ children }) => {
             </div>
             <div className="overflow-hidden">
               <h4 className="text-xs font-bold truncate text-white">{user.name}</h4>
-              <p className="text-[10px] font-mono text-slate-400 truncate">{user.role}</p>
+              <p className="text-[10px] font-mono text-slate-400 truncate">
+                {user.id_number}{user.department_name ? ` · ${user.department_name}` : ` · ${user.role}`}
+              </p>
             </div>
           </div>
           <button
