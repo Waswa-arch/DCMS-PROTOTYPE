@@ -21,3 +21,6 @@ commit_history.txt
 # System Overlays
 .DS_Store
 dist
+# Generated certificate PDFs — contain real student names/ID numbers,
+# never belongs in version control, same category of risk as database.sqlite
+backend/certificates/
