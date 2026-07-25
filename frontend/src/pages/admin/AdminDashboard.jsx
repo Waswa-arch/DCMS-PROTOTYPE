@@ -25,6 +25,8 @@ export default function AdminDashboard() {
   const [saving, setSaving] = useState(null);
   const [feedback, setFeedback] = useState({});
   const [pendingChanges, setPendingChanges] = useState({});
+  const [certActioning, setCertActioning] = useState(null);
+const [certResults, setCertResults] = useState({}); // { [requestId]: { type, message } }
   const [approvedStudentsOpen, setApprovedStudentsOpen] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
 
@@ -119,6 +121,37 @@ export default function AdminDashboard() {
       setSaving(null);
     }
   };
+
+  const handleGenerateCertificate = async (requestId) => {
+  setCertActioning(requestId);
+  try {
+    const res = await api.post(`/clearance/certificate/${requestId}/generate`);
+    setCertResults((prev) => ({
+      ...prev,
+      [requestId]: { type: 'success', message: res.data.message },
+    }));
+  } catch (err) {
+    setCertResults((prev) => ({
+      ...prev,
+      [requestId]: { type: 'error', message: err.response?.data?.message || 'Generation failed.' },
+    }));
+  } finally {
+    setCertActioning(null);
+  }
+};
+
+const handleDownloadCertificate = async (requestId) => {
+  try {
+    const res = await api.get(`/clearance/certificate/${requestId}/download`, { responseType: 'blob' });
+    const url = URL.createObjectURL(res.data);
+    window.open(url);
+  } catch (err) {
+    setCertResults((prev) => ({
+      ...prev,
+      [requestId]: { type: 'error', message: 'No certificate found — generate one first.' },
+    }));
+  }
+};
 
   const formatTimestamp = (ts) => {
     if (!ts) return '';
@@ -360,9 +393,9 @@ export default function AdminDashboard() {
                 {approvedStudents.map((student) => (
                   <div
                     key={student.student_id}
-                    className="px-4 py-3 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors"
+                    className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 transition-colors"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-sm font-bold text-slate-800">{student.student_name}</div>
                       <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
                         <span className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
@@ -370,9 +403,31 @@ export default function AdminDashboard() {
                         </span>
                         <span>{student.student_email}</span>
                       </div>
+                      {certResults[student.request_id] && (
+                        <div className={`text-[10px] mt-1 font-medium ${
+                          certResults[student.request_id].type === 'success' ? 'text-emerald-600' : 'text-rose-600'
+                        }`}>
+                          {certResults[student.request_id].message}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
-                      {formatTimestamp(student.cleared_at)}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
+                        {formatTimestamp(student.cleared_at)}
+                      </span>
+                      <button
+                        onClick={() => handleGenerateCertificate(student.request_id)}
+                        disabled={certActioning === student.request_id}
+                        className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50 transition-colors"
+                      >
+                        {certActioning === student.request_id ? '...' : 'Generate'}
+                      </button>
+                      <button
+                        onClick={() => handleDownloadCertificate(student.request_id)}
+                        className="text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                      >
+                        Download
+                      </button>
                     </div>
                   </div>
                 ))}

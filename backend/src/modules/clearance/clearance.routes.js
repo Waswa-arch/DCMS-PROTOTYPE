@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getMyClearance, getOfficerQueue, getOfficerStats, getOfficerHistory, getApprovedStudents, actionClearanceItem, resubmitClearanceItem } from './clearance.controller.js';
+import { getMyClearance, getOfficerQueue, getOfficerStats, getOfficerHistory, getApprovedStudents, generateCertificate, downloadCertificate, actionClearanceItem, resubmitClearanceItem } from './clearance.controller.js';
 import authenticate from '../../middleware/authenticate.js';
 import authorize from '../../middleware/authorize.js';
 
@@ -11,6 +11,8 @@ router.get('/officer/queue', authenticate, authorize(['OFFICER', 'ADMIN']), getO
 router.get('/officer/stats', authenticate, authorize(['OFFICER', 'ADMIN']), getOfficerStats);
 router.get('/officer/history', authenticate, authorize(['OFFICER', 'ADMIN']), getOfficerHistory);
 router.get('/approved-students', authenticate, authorize(['OFFICER', 'ADMIN']), getApprovedStudents);
+router.post('/certificate/:requestId/generate', authenticate, authorize(['OFFICER', 'ADMIN']), generateCertificate);
+router.get('/certificate/:requestId/download', authenticate, authorize(['STUDENT', 'OFFICER', 'ADMIN']), downloadCertificate);
 router.post('/item/:id/action', authenticate, authorize(['OFFICER', 'ADMIN']), actionClearanceItem);
 router.post('/item/:id/resubmit', authenticate, authorize(['STUDENT']), resubmitClearanceItem);
 export default router;

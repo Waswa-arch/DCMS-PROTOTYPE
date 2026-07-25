@@ -1,4 +1,11 @@
-import { db } from '../../config/db.js';
+
+import PDFDocument from 'pdfkit';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CERTIFICATES_DIR = path.resolve(__dirname, '../../../certificates');import { db } from '../../config/db.js';
 
 /**
  * Resolves an officer's CURRENT department from the database, not the JWT.
@@ -265,6 +272,7 @@ export const getApprovedStudents = async (req, res) => {
 
     const students = await db.all(`
       SELECT 
+        cr.id as request_id,
         u.id as student_id,
         u.name as student_name,
         u.id_number as student_id_number,
@@ -279,6 +287,172 @@ export const getApprovedStudents = async (req, res) => {
     return res.status(200).json({ success: true, students });
   } catch (error) {
     console.error('Approved Students Error:', error);
+    return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
+  }
+};
+/**
+ * ADMIN + ACADEMIC REGISTRAR OFFICER ONLY: GENERATE CERTIFICATE
+ * Strictly gated on overall_status = 'APPROVED' — a student must be fully
+ * cleared across every department before a certificate can exist at all.
+ * Same access pattern as getApprovedStudents: ADMIN always allowed, OFFICER
+ * only if their CURRENT department (resolved fresh from DB) is Academic
+ * Registrar. One certificate per request, enforced by the existing UNIQUE
+ * constraint on certificates.request_id — a second attempt returns the
+ * already-issued certificate's info instead of erroring.
+ */
+export const generateCertificate = async (req, res) => {
+  const requestId = req.params.requestId;
+
+  try {
+    if (req.user.role === 'OFFICER') {
+      const dept = await db.get(
+        `SELECT d.name FROM users u 
+         JOIN departments d ON u.department_assigned_id = d.id 
+         WHERE u.id = ?`,
+        [req.user.id]
+      );
+      if (!dept || dept.name !== 'Office of the Academic Registrar') {
+        return res.status(403).json({
+          success: false,
+          message: 'Access Denied: Only the Academic Registrar or an administrator can issue certificates.'
+        });
+      }
+    }
+
+    const request = await db.get(
+      `SELECT cr.id, cr.overall_status, u.name as student_name, u.id_number as student_id_number
+       FROM clearance_requests cr
+       JOIN users u ON cr.student_id = u.id
+       WHERE cr.id = ?`,
+      [requestId]
+    );
+
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Clearance request not found.' });
+    }
+
+    if (request.overall_status !== 'APPROVED') {
+      return res.status(409).json({
+        success: false,
+        message: 'Cannot issue a certificate: this student has not been fully cleared across all departments yet.'
+      });
+    }
+
+    const existing = await db.get('SELECT id, file_path, issued_at FROM certificates WHERE request_id = ?', [requestId]);
+    if (existing) {
+      return res.status(200).json({
+        success: true,
+        message: 'Certificate already issued.',
+        certificate: existing
+      });
+    }
+
+    if (!fs.existsSync(CERTIFICATES_DIR)) {
+      fs.mkdirSync(CERTIFICATES_DIR, { recursive: true });
+    }
+
+    const fileName = `certificate_${requestId}.pdf`;
+    const filePath = path.join(CERTIFICATES_DIR, fileName);
+
+    await new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'A4', margin: 72 });
+      const stream = fs.createWriteStream(filePath);
+      doc.pipe(stream);
+
+      doc.fontSize(20).font('Helvetica-Bold').text('Certificate of Clearance', { align: 'center' });
+      doc.moveDown(2);
+      doc.fontSize(12).font('Helvetica').text('Kabarak University', { align: 'center' });
+      doc.moveDown(2);
+      doc.fontSize(14).text(`This certifies that`, { align: 'center' });
+      doc.moveDown(0.5);
+      doc.fontSize(18).font('Helvetica-Bold').text(request.student_name, { align: 'center' });
+      doc.fontSize(12).font('Helvetica').text(`(${request.student_id_number})`, { align: 'center' });
+      doc.moveDown(1);
+      doc.fontSize(14).text('has satisfactorily completed clearance from all university departments.', {
+        align: 'center',
+      });
+      doc.moveDown(2);
+      doc.fontSize(11).text(`Issued: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`, {
+        align: 'center',
+      });
+
+      doc.end();
+      stream.on('finish', resolve);
+      stream.on('error', reject);
+    });
+
+    const relativeFilePath = path.join('certificates', fileName);
+    await db.run(
+      'INSERT INTO certificates (request_id, file_path) VALUES (?, ?)',
+      [requestId, relativeFilePath]
+    );
+
+    const created = await db.get('SELECT id, file_path, issued_at FROM certificates WHERE request_id = ?', [requestId]);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Certificate generated successfully.',
+      certificate: created
+    });
+  } catch (error) {
+    console.error('Certificate Generation Error:', error);
+    return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
+  }
+};
+
+/**
+ * DOWNLOAD CERTIFICATE
+ * A STUDENT may only download their OWN certificate — checked against the
+ * clearance_requests row's student_id, same ownership pattern used
+ * elsewhere (e.g. resubmitClearanceItem). ADMIN and the Academic Registrar
+ * officer may download ANY certificate, same access pattern as generation.
+ */
+export const downloadCertificate = async (req, res) => {
+  const requestId = req.params.requestId;
+
+  try {
+    const certificate = await db.get(
+      `SELECT c.file_path, cr.student_id 
+       FROM certificates c 
+       JOIN clearance_requests cr ON c.request_id = cr.id 
+       WHERE c.request_id = ?`,
+      [requestId]
+    );
+
+    if (!certificate) {
+      return res.status(404).json({ success: false, message: 'No certificate has been issued for this request yet.' });
+    }
+
+    if (req.user.role === 'STUDENT') {
+      if (certificate.student_id !== req.user.id) {
+        return res.status(403).json({ success: false, message: 'Forbidden: this is not your certificate.' });
+      }
+    } else if (req.user.role === 'OFFICER') {
+      const dept = await db.get(
+        `SELECT d.name FROM users u 
+         JOIN departments d ON u.department_assigned_id = d.id 
+         WHERE u.id = ?`,
+        [req.user.id]
+      );
+      if (!dept || dept.name !== 'Office of the Academic Registrar') {
+        return res.status(403).json({
+          success: false,
+          message: 'Access Denied: Only the Academic Registrar or an administrator can access certificates.'
+        });
+      }
+    }
+    // ADMIN falls through with no additional check — always allowed.
+
+    const absolutePath = path.resolve(__dirname, '../../../', certificate.file_path);
+
+    if (!fs.existsSync(absolutePath)) {
+      console.error(`Certificate file missing on disk: ${absolutePath}`);
+      return res.status(500).json({ success: false, message: 'Certificate file is missing on the server.' });
+    }
+
+    return res.download(absolutePath, `certificate_${requestId}.pdf`);
+  } catch (error) {
+    console.error('Certificate Download Error:', error);
     return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
   }
 };

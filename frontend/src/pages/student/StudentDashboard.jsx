@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
 import DashboardLayout from '../../layouts/DashboardLayout';
-import { Building2, CheckCircle, Clock, Flag, ChevronDown, ChevronUp, Send } from 'lucide-react';
+import { Building2, CheckCircle, Clock, Flag, ChevronDown, ChevronUp, Send, Download } from 'lucide-react';
 
 const StudentDashboard = () => {
   const [data, setData] = useState(null);
@@ -13,6 +13,9 @@ const StudentDashboard = () => {
   const [submitting, setSubmitting] = useState(null);
   const [resubmitFeedback, setResubmitFeedback] = useState({});
 
+  const [downloadingCert, setDownloadingCert] = useState(false);
+  const [certError, setCertError] = useState(null);
+
   const fetchClearance = async () => {
     try {
       setLoading(true);
@@ -22,6 +25,20 @@ const StudentDashboard = () => {
       setError('Unable to load your clearance data. Please refresh or contact support.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadCertificate = async (requestId) => {
+    setDownloadingCert(true);
+    setCertError(null);
+    try {
+      const res = await api.get(`/clearance/certificate/${requestId}/download`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      window.open(url);
+    } catch (err) {
+      setCertError('Certificate not yet available. Contact the Academic Registrar if you believe this is an error.');
+    } finally {
+      setDownloadingCert(false);
     }
   };
 
@@ -128,10 +145,27 @@ const StudentDashboard = () => {
               Track your departmental clearance progress across all university nodes.
             </p>
           </div>
-          <span className={getStatusBadge(clearance_request.overall_status)}>
-            {clearance_request.overall_status}
-          </span>
+          <div className="flex items-center gap-3">
+            {clearance_request.overall_status === 'APPROVED' && (
+              <button
+                onClick={() => handleDownloadCertificate(clearance_request.id)}
+                disabled={downloadingCert}
+                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {downloadingCert ? 'Loading...' : 'Download Certificate'}
+              </button>
+            )}
+            <span className={getStatusBadge(clearance_request.overall_status)}>
+              {clearance_request.overall_status}
+            </span>
+          </div>
         </div>
+        {certError && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg">
+            {certError}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
