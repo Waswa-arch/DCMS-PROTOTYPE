@@ -310,3 +310,66 @@ export const getAnalytics = async (req, res) => {
     return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
   }
 };
+/**
+ * ADMIN ONLY: GET ALL FLAGGED CLEARANCE ITEMS ACROSS ALL DEPARTMENTS
+ * Returns every dept_clearance_items row with status = FLAGGED, joined
+ * with student info, department name, and the officer who flagged it.
+ * Feeds the clickable FLAGGED stat card on the admin dashboard.
+ */
+export const getFlaggedItems = async (req, res) => {
+  try {
+    const flagged = await db.all(`
+      SELECT
+        dci.id as item_id,
+        dci.remarks,
+        dci.actioned_at,
+        d.name as department_name,
+        u.name as student_name,
+        u.id_number as student_id_number,
+        u.email as student_email,
+        o.name as flagged_by_officer,
+        cr.id as request_id,
+        cr.overall_status
+      FROM dept_clearance_items dci
+      JOIN departments d ON dci.department_id = d.id
+      JOIN clearance_requests cr ON dci.request_id = cr.id
+      JOIN users u ON cr.student_id = u.id
+      LEFT JOIN users o ON dci.actioned_by_officer_id = o.id
+      WHERE dci.status = 'FLAGGED'
+      ORDER BY dci.actioned_at DESC
+    `);
+
+    return res.status(200).json({ success: true, flagged });
+  } catch (error) {
+    console.error('Admin Flagged Items Error:', error);
+    return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
+  }
+};
+
+/**
+ * ADMIN ONLY: GET DEPARTMENTS WITH NO OFFICER ASSIGNED
+ * Returns every department that has zero officers currently assigned.
+ * Feeds the uncovered department warning banner on the admin dashboard.
+ */
+export const getUncoveredDepartments = async (req, res) => {
+  try {
+    const uncovered = await db.all(`
+      SELECT
+        d.id,
+        d.name,
+        d.sequence_order,
+        d.department_type,
+        COUNT(u.id) as officer_count
+      FROM departments d
+      LEFT JOIN users u ON u.department_assigned_id = d.id AND u.role = 'OFFICER'
+      GROUP BY d.id
+      HAVING officer_count = 0
+      ORDER BY d.sequence_order ASC
+    `);
+
+    return res.status(200).json({ success: true, uncovered });
+  } catch (error) {
+    console.error('Admin Uncovered Departments Error:', error);
+    return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
+  }
+};
