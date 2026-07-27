@@ -710,3 +710,120 @@ export const resubmitClearanceItem = async (req, res) => {
     return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
   }
 };
+
+/**
+ * ACADEMIC REGISTRAR ONLY: BULK GENERATE CERTIFICATES
+ * Generates certificates for ALL students whose overall_status is 'APPROVED'
+ * and who do not yet have a certificate. Students already issued one are
+ * skipped (idempotent). Returns a summary of newly issued vs failed.
+ */
+export const bulkGenerateCertificates = async (req, res) => {
+  try {
+    // Gate: OFFICER must be Academic Registrar
+    if (req.user.role === 'OFFICER') {
+      const dept = await db.get(
+        `SELECT d.name FROM users u 
+         JOIN departments d ON u.department_assigned_id = d.id 
+         WHERE u.id = ?`,
+        [req.user.id]
+      );
+      if (!dept || dept.name !== 'Office of the Academic Registrar') {
+        return res.status(403).json({
+          success: false,
+          message: 'Access Denied: Only the Academic Registrar can bulk-generate certificates.'
+        });
+      }
+    }
+
+    // Fetch all fully-approved students who don't yet have a certificate
+    const eligible = await db.all(`
+      SELECT 
+        cr.id as request_id,
+        u.name as student_name,
+        u.id_number as student_id_number,
+        u.id as student_id
+      FROM clearance_requests cr
+      JOIN users u ON cr.student_id = u.id
+      LEFT JOIN certificates c ON c.request_id = cr.id
+      WHERE cr.overall_status = 'APPROVED' AND c.id IS NULL
+    `);
+
+    if (eligible.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No new certificates to generate. All approved students already have one.',
+        summary: { newly_issued: 0, already_existing: 0, failed: 0 }
+      });
+    }
+
+    if (!fs.existsSync(CERTIFICATES_DIR)) {
+      fs.mkdirSync(CERTIFICATES_DIR, { recursive: true });
+    }
+
+    const results = { newly_issued: 0, already_existing: 0, failed: [] };
+
+    for (const student of eligible) {
+      try {
+        const fileName = `certificate_${student.request_id}.pdf`;
+        const filePath = path.join(CERTIFICATES_DIR, fileName);
+
+        await new Promise((resolve, reject) => {
+          const doc = new PDFDocument({ size: 'A4', margin: 72 });
+          const stream = fs.createWriteStream(filePath);
+          doc.pipe(stream);
+
+          doc.fontSize(20).font('Helvetica-Bold').text('Certificate of Clearance', { align: 'center' });
+          doc.moveDown(2);
+          doc.fontSize(12).font('Helvetica').text('Kabarak University', { align: 'center' });
+          doc.moveDown(2);
+          doc.fontSize(14).text('This certifies that', { align: 'center' });
+          doc.moveDown(0.5);
+          doc.fontSize(18).font('Helvetica-Bold').text(student.student_name, { align: 'center' });
+          doc.fontSize(12).font('Helvetica').text(`(${student.student_id_number})`, { align: 'center' });
+          doc.moveDown(1);
+          doc.fontSize(14).text('has satisfactorily completed clearance from all university departments.', { align: 'center' });
+          doc.moveDown(2);
+          doc.fontSize(11).text(
+            `Issued: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+            { align: 'center' }
+          );
+
+          doc.end();
+          stream.on('finish', resolve);
+          stream.on('error', reject);
+        });
+
+        const relativeFilePath = path.join('certificates', fileName);
+        await db.run(
+          'INSERT OR IGNORE INTO certificates (request_id, file_path) VALUES (?, ?)',
+          [student.request_id, relativeFilePath]
+        );
+
+        await db.run(
+          `INSERT INTO notifications (user_id, title, message) VALUES (?, 'Certificate Issued', 'Your clearance certificate has been generated and is ready for download.')`,
+          [student.student_id]
+        );
+
+        await db.run(
+          `INSERT INTO audit_log (actor_id, action_type, entity_affected, details) VALUES (?, 'BULK_CERTIFICATE_GENERATION', 'certificates', ?)`,
+          [req.user.id, `Bulk-generated certificate for request ID ${student.request_id} (${student.student_name})`]
+        );
+
+        results.newly_issued++;
+      } catch (studentError) {
+        console.error(`Failed to generate certificate for request ${student.request_id}:`, studentError);
+        results.failed.push({ request_id: student.request_id, name: student.student_name });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Bulk generation complete. ${results.newly_issued} certificate(s) issued.`,
+      summary: results
+    });
+
+  } catch (error) {
+    console.error('Bulk Certificate Generation Error:', error);
+    return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
+  }
+};

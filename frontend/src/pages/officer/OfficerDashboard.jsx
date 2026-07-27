@@ -21,6 +21,8 @@ const OfficerDashboard = () => {
   const [history, setHistory] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [approvedStudents, setApprovedStudents] = useState(null); // null = not yet loaded or not authorized
+  const [bulkGenerating, setBulkGenerating] = useState(false);
+  const [bulkSummary, setBulkSummary] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const fetchStats = async () => {
@@ -50,6 +52,20 @@ const OfficerDashboard = () => {
       setApprovedStudents(null);
     }
   };
+  const handleBulkGenerate = async () => {
+  if (!window.confirm(`Generate certificates for all ${approvedStudents.length} cleared student(s)?`)) return;
+  setBulkGenerating(true);
+  setBulkSummary(null);
+  try {
+    const { data } = await api.post('/clearance/certificates/bulk-generate');
+    setBulkSummary(data.summary);
+  } catch (err) {
+    console.error('Bulk generation failed:', err);
+    setBulkSummary({ error: 'Bulk generation failed. Check the console.' });
+  } finally {
+    setBulkGenerating(false);
+  }
+};
 
   const fetchQueue = async () => {
     try {
@@ -395,7 +411,26 @@ const OfficerDashboard = () => {
                 Fully Cleared Students — {approvedStudents.length} {approvedStudents.length === 1 ? 'student' : 'students'}
               </h2>
             </div>
+<div className="flex items-center justify-between mb-4">
+  <button
+    onClick={handleBulkGenerate}
+    disabled={bulkGenerating || approvedStudents.length === 0}
+    className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+  >
+    {bulkGenerating ? 'Generating...' : `Generate All Certificates (${approvedStudents.length})`}
+  </button>
 
+  {bulkSummary && !bulkSummary.error && (
+    <span className="text-sm text-green-700 font-medium">
+      ✓ {bulkSummary.newly_issued} new certificate(s) issued.
+      {bulkSummary.failed.length > 0 && ` ${bulkSummary.failed.length} failed.`}
+    </span>
+  )}
+
+  {bulkSummary?.error && (
+    <span className="text-sm text-red-600 font-medium">{bulkSummary.error}</span>
+  )}
+</div>
             {approvedStudents.length === 0 ? (
               <div className="px-6 py-8 text-center text-xs text-slate-400">
                 No students have completed clearance across all departments yet.

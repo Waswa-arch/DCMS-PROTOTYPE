@@ -172,3 +172,141 @@ export const getClearanceOverview = async (req, res) => {
     return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
   }
 };
+
+/**
+ * ADMIN ONLY: ANALYTICS AND REPORTING
+ * Scope, confirmed before building: admin-only, all-time totals (no date
+ * filtering), on-screen only (no export), real-time queries against the
+ * live database (no caching layer — current data volume doesn't need it).
+ * Four metrics, each a separate query for clarity and independent
+ * failure isolation:
+ *
+ * 1. overall_status_totals — students by ACTIVE/APPROVED/FLAGGED, same
+ *    shape as getStats' clearance map, kept separate here so this
+ *    endpoint is self-contained and doesn't require calling getStats too.
+ * 2. department_breakdown — per-department PENDING/APPROVED/FLAGGED
+ *    item counts, ordered by the department's own sequence_order so the
+ *    dashboard can show them in clearance-chain order.
+ * 3. avg_time_to_clearance — per department, the average days between a
+ *    request's creation and the moment THAT department's item was
+ *    APPROVED. Only counts items that are actually APPROVED with a
+ *    recorded actioned_at; a department with zero approved items yet
+ *    returns null rather than 0, so the UI can distinguish "no data yet"
+ *    from "instant clearance."
+ * 4. bottleneck_ranking — departments ordered worst-first by a simple,
+ *    transparent heuristic: average age (in days) of that department's
+ *    CURRENTLY PENDING items, then by flagged count as a tiebreaker.
+ *    This surfaces where students are stuck right now, not historical
+ *    slowness — pairs naturally with avg_time_to_clearance, which is the
+ *    historical view.
+ */
+export const getAnalytics = async (req, res) => {
+  try {
+    const [
+      overallStatusRows,
+      departmentBreakdownRows,
+      avgClearanceRows,
+      bottleneckRows
+    ] = await Promise.all([
+      db.all(
+        `SELECT overall_status, COUNT(*) as count
+         FROM clearance_requests
+         GROUP BY overall_status`
+      ),
+      db.all(
+        `SELECT
+           d.id as department_id,
+           d.name as department_name,
+           d.sequence_order,
+           SUM(CASE WHEN dci.status = 'PENDING' THEN 1 ELSE 0 END) as pending_count,
+           SUM(CASE WHEN dci.status = 'APPROVED' THEN 1 ELSE 0 END) as approved_count,
+           SUM(CASE WHEN dci.status = 'FLAGGED' THEN 1 ELSE 0 END) as flagged_count,
+           COUNT(dci.id) as total_count
+         FROM departments d
+         LEFT JOIN dept_clearance_items dci ON dci.department_id = d.id
+         GROUP BY d.id
+         ORDER BY d.sequence_order ASC`
+      ),
+      db.all(
+        `SELECT
+           d.id as department_id,
+           d.name as department_name,
+           d.sequence_order,
+           AVG(julianday(dci.actioned_at) - julianday(cr.created_at)) as avg_days_to_clearance,
+           COUNT(dci.id) as approved_sample_size
+         FROM departments d
+         LEFT JOIN dept_clearance_items dci
+           ON dci.department_id = d.id AND dci.status = 'APPROVED' AND dci.actioned_at IS NOT NULL
+         LEFT JOIN clearance_requests cr ON cr.id = dci.request_id
+         GROUP BY d.id
+         ORDER BY d.sequence_order ASC`
+      ),
+      db.all(
+        `SELECT
+           d.id as department_id,
+           d.name as department_name,
+           d.sequence_order,
+           SUM(CASE WHEN dci.status = 'PENDING' THEN 1 ELSE 0 END) as pending_count,
+           SUM(CASE WHEN dci.status = 'FLAGGED' THEN 1 ELSE 0 END) as flagged_count,
+           AVG(CASE WHEN dci.status = 'PENDING' THEN julianday('now') - julianday(cr.created_at) ELSE NULL END) as avg_pending_age_days
+         FROM departments d
+         LEFT JOIN dept_clearance_items dci ON dci.department_id = d.id
+         LEFT JOIN clearance_requests cr ON cr.id = dci.request_id
+         GROUP BY d.id
+         HAVING pending_count > 0 OR flagged_count > 0`
+      )
+    ]);
+
+    const overallStatusTotals = { ACTIVE: 0, APPROVED: 0, FLAGGED: 0 };
+    overallStatusRows.forEach((row) => { overallStatusTotals[row.overall_status] = row.count; });
+
+    const departmentBreakdown = departmentBreakdownRows.map((row) => ({
+      department_id: row.department_id,
+      department_name: row.department_name,
+      pending_count: row.pending_count || 0,
+      approved_count: row.approved_count || 0,
+      flagged_count: row.flagged_count || 0,
+      total_count: row.total_count || 0
+    }));
+
+    const avgTimeToClearance = avgClearanceRows.map((row) => ({
+      department_id: row.department_id,
+      department_name: row.department_name,
+      avg_days_to_clearance: row.approved_sample_size > 0
+        ? Math.round(row.avg_days_to_clearance * 10) / 10
+        : null,
+      sample_size: row.approved_sample_size || 0
+    }));
+
+    // Worst-first: longest-waiting pending items first, most-flagged as
+    // tiebreaker. Departments with zero pending and zero flagged items are
+    // excluded entirely by the query's HAVING clause — nothing to rank.
+    const bottleneckRanking = bottleneckRows
+      .map((row) => ({
+        department_id: row.department_id,
+        department_name: row.department_name,
+        pending_count: row.pending_count || 0,
+        flagged_count: row.flagged_count || 0,
+        avg_pending_age_days: row.avg_pending_age_days !== null
+          ? Math.round(row.avg_pending_age_days * 10) / 10
+          : null
+      }))
+      .sort((a, b) => {
+        const aAge = a.avg_pending_age_days ?? -1;
+        const bAge = b.avg_pending_age_days ?? -1;
+        if (bAge !== aAge) return bAge - aAge;
+        return b.flagged_count - a.flagged_count;
+      });
+
+    return res.status(200).json({
+      success: true,
+      overall_status_totals: overallStatusTotals,
+      department_breakdown: departmentBreakdown,
+      avg_time_to_clearance: avgTimeToClearance,
+      bottleneck_ranking: bottleneckRanking
+    });
+  } catch (error) {
+    console.error('Admin Analytics Error:', error);
+    return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
+  }
+};

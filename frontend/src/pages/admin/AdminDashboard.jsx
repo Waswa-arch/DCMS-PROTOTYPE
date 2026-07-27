@@ -12,6 +12,8 @@ import {
   Clock,
   ShieldCheck,
   GraduationCap,
+  BarChart3,
+  TrendingDown,
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -29,6 +31,20 @@ export default function AdminDashboard() {
 const [certResults, setCertResults] = useState({}); // { [requestId]: { type, message } }
   const [approvedStudentsOpen, setApprovedStudentsOpen] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
+  const [analytics, setAnalytics] = useState(null);
+  const [analyticsOpen, setAnalyticsOpen] = useState(true);
+  const [analyticsError, setAnalyticsError] = useState(null);
+
+  const fetchAnalytics = async () => {
+    try {
+      setAnalyticsError(null);
+      const { data } = await api.get('/admin/analytics');
+      setAnalytics(data);
+    } catch (err) {
+      // Non-fatal: the rest of the dashboard still works if this fails.
+      setAnalyticsError('Failed to load analytics.');
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -45,6 +61,7 @@ const [certResults, setCertResults] = useState({}); // { [requestId]: { type, me
       setStats(statsRes.data.stats || null);
       setRecentAudit(statsRes.data.recent_audit || []);
       setApprovedStudents(approvedRes.data.students || []);
+      await fetchAnalytics();
     } catch (err) {
       setError('Failed to load admin data. Is the backend running?');
     } finally {
@@ -506,6 +523,162 @@ const handleDownloadCertificate = async (requestId) => {
                 })}
               </div>
             )
+          )}
+        </div>
+
+        {/* ANALYTICS & REPORTING — real data from GET /api/admin/analytics.
+            Admin-only, all-time totals, real-time queries (matches every
+            other stat on this dashboard — no caching layer). Four metrics:
+            overall status totals, per-department breakdown, average
+            time-to-clearance per department, and a bottleneck ranking of
+            departments with the oldest pending items right now. */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <button
+            onClick={() => setAnalyticsOpen((prev) => !prev)}
+            className="w-full bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-2 hover:bg-slate-100 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-3.5 w-3.5 text-slate-400" />
+              <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Analytics &amp; Reporting
+              </h2>
+            </div>
+            <span className="text-xs text-slate-400">
+              {analyticsOpen ? 'Hide ▲' : 'Show ▼'}
+            </span>
+          </button>
+
+          {analyticsOpen && (
+            <div className="p-4 space-y-6">
+              {analyticsError && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs px-4 py-3 rounded-lg">
+                  {analyticsError}
+                </div>
+              )}
+
+              {!analytics && !analyticsError && (
+                <div className="text-center text-xs text-slate-400 py-6">
+                  Loading analytics...
+                </div>
+              )}
+
+              {analytics && (
+                <>
+                  {/* 1. OVERALL STATUS TOTALS */}
+                  <div>
+                    <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Students by Overall Status
+                    </h3>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-amber-50 border border-amber-100 rounded-lg p-3">
+                        <div className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Active</div>
+                        <div className="text-xl font-black text-amber-700 mt-0.5">
+                          {analytics.overall_status_totals.ACTIVE}
+                        </div>
+                      </div>
+                      <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
+                        <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Approved</div>
+                        <div className="text-xl font-black text-emerald-700 mt-0.5">
+                          {analytics.overall_status_totals.APPROVED}
+                        </div>
+                      </div>
+                      <div className="bg-rose-50 border border-rose-100 rounded-lg p-3">
+                        <div className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Flagged</div>
+                        <div className="text-xl font-black text-rose-700 mt-0.5">
+                          {analytics.overall_status_totals.FLAGGED}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. PER-DEPARTMENT BREAKDOWN + 3. AVG TIME-TO-CLEARANCE
+                      Combined into one table since both are per-department
+                      and the avg-time column reads naturally alongside the
+                      status counts it explains. */}
+                  <div>
+                    <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Department Breakdown &amp; Avg. Time to Clearance
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-left text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                            <th className="py-2 pr-3 font-bold">Department</th>
+                            <th className="py-2 px-3 font-bold text-right">Pending</th>
+                            <th className="py-2 px-3 font-bold text-right">Approved</th>
+                            <th className="py-2 px-3 font-bold text-right">Flagged</th>
+                            <th className="py-2 pl-3 font-bold text-right">Avg. Days to Clear</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {analytics.department_breakdown.map((dept) => {
+                            const timing = analytics.avg_time_to_clearance.find(
+                              (t) => t.department_id === dept.department_id
+                            );
+                            return (
+                              <tr key={dept.department_id} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="py-2 pr-3 font-bold text-slate-700">{dept.department_name}</td>
+                                <td className="py-2 px-3 text-right text-amber-600 font-mono">{dept.pending_count}</td>
+                                <td className="py-2 px-3 text-right text-emerald-600 font-mono">{dept.approved_count}</td>
+                                <td className="py-2 px-3 text-right text-rose-600 font-mono">{dept.flagged_count}</td>
+                                <td className="py-2 pl-3 text-right font-mono text-slate-500">
+                                  {timing && timing.avg_days_to_clearance !== null
+                                    ? `${timing.avg_days_to_clearance}d (n=${timing.sample_size})`
+                                    : '—'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* 4. BOTTLENECK RANKING — worst-first, only departments
+                      with pending or flagged items right now. */}
+                  <div>
+                    <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <TrendingDown className="h-3.5 w-3.5" />
+                      Bottleneck Ranking
+                    </h3>
+                    {analytics.bottleneck_ranking.length === 0 ? (
+                      <div className="text-xs text-slate-400 py-2">
+                        No departments currently have pending or flagged items.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-100 border border-slate-100 rounded-lg overflow-hidden">
+                        {analytics.bottleneck_ranking.map((dept, idx) => (
+                          <div
+                            key={dept.department_id}
+                            className="px-3 py-2 flex items-center justify-between gap-3 hover:bg-slate-50/50 transition-colors"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-[10px] font-black text-slate-300 w-4 shrink-0">
+                                {idx + 1}
+                              </span>
+                              <span className="text-xs font-bold text-slate-700 truncate">
+                                {dept.department_name}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 text-[10px] font-mono shrink-0">
+                              <span className="text-amber-600">
+                                {dept.pending_count} pending
+                                {dept.avg_pending_age_days !== null
+                                  ? ` (avg ${dept.avg_pending_age_days}d old)`
+                                  : ''}
+                              </span>
+                              {dept.flagged_count > 0 && (
+                                <span className="text-rose-600">{dept.flagged_count} flagged</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>

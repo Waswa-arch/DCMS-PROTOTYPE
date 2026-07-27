@@ -183,7 +183,7 @@ const DashboardLayout = ({ children }) => {
           <div className="p-6 border-b border-slate-800 bg-slate-950 flex items-center gap-3">
             <ShieldCheck className="h-8 w-8 text-emerald-400" />
             <div>
-              <h1 className="font-extrabold text-base tracking-wide text-white uppercase">Kabarak Univ</h1>
+              <h1 className="font-extrabold text-base tracking-wide text-white uppercase">DCMS</h1>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Digital Clearance</p>
             </div>
           </div>
