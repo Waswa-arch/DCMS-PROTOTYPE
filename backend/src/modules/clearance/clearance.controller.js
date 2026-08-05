@@ -65,14 +65,14 @@ async function recalculateOverallStatus(requestId, studentId) {
     `SELECT status, COUNT(*) as cnt FROM dept_clearance_items WHERE request_id = ? GROUP BY status`,
     [requestId]
   );
-  const counts = { PENDING: 0, APPROVED: 0, FLAGGED: 0 };
+  const counts = { PENDING: 0, APPROVED: 0, FLAGGED: 0, NO_OBLIGATION: 0 };
   statusCounts.forEach((row) => { counts[row.status] = row.cnt; });
-  const totalItems = counts.PENDING + counts.APPROVED + counts.FLAGGED;
+  const totalItems = counts.PENDING + counts.APPROVED + counts.FLAGGED + counts.NO_OBLIGATION;
 
   let newOverallStatus;
   if (counts.FLAGGED > 0) {
     newOverallStatus = 'FLAGGED';
-  } else if (totalItems > 0 && counts.APPROVED === totalItems) {
+  } else if (totalItems > 0 && (counts.APPROVED + counts.NO_OBLIGATION) === totalItems) {
     newOverallStatus = 'APPROVED';
   } else {
     newOverallStatus = 'ACTIVE';
@@ -132,12 +132,10 @@ export const getMyClearance = async (req, res) => {
           // school department (based on the student's id_number prefix) is
           // added on top — if no prefix matches (test IDs, unmapped
           // programs), the student simply gets universal-only, no error.
-          const schoolCode = resolveSchoolCode(req.user.id_number);
           const departments = await db.all(
             `SELECT id FROM departments 
-             WHERE department_type = 'UNIVERSAL' OR school_code = ? 
-             ORDER BY sequence_order ASC`,
-            [schoolCode || '__NO_MATCH__']
+             WHERE department_type = 'UNIVERSAL' OR department_type = 'SCHOOL'
+             ORDER BY sequence_order ASC`
           );
           for (const dept of departments) {
             await db.run(
@@ -476,7 +474,7 @@ export const getOfficerQueue = async (req, res) => {
     }
 
     const { status } = req.query;
-    const validStatuses = ['PENDING', 'APPROVED', 'FLAGGED'];
+    const validStatuses = ['PENDING', 'APPROVED', 'FLAGGED', 'NO_OBLIGATION'];
     const filterStatus = validStatuses.includes(status) ? status : 'PENDING';
 
     const queue = await db.all(`
@@ -511,7 +509,7 @@ export const actionClearanceItem = async (req, res) => {
   const { status, remarks } = req.body;
   const officerId = req.user.id;
 
-  if (!status || !['APPROVED', 'FLAGGED'].includes(status)) {
+  if (!status || !['APPROVED', 'FLAGGED', 'NO_OBLIGATION'].includes(status)) {
     return res.status(400).json({ success: false, message: 'Invalid action payload.' });
   }
 
@@ -584,7 +582,7 @@ export const actionClearanceItem = async (req, res) => {
            WHERE dci.request_id = ? AND dci.department_id != ?`,
           [item.request_id, item.department_id]
         );
-        const allOthersApproved = otherItems.every((i) => i.status === 'APPROVED');
+        const allOthersApproved = otherItems.every((i) => i.status === 'APPROVED' || i.status === 'NO_OBLIGATION');
 
         if (!allOthersApproved) {
           return res.status(409).json({

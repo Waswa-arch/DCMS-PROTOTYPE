@@ -1,3 +1,107 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ============================================================
+   DCMS motion layer — shared across Student/Officer/Admin
+   dashboards. Motion here is tied to what's actually happening
+   (progress filling, data arriving, state changing), not
+   decoration bolted on afterward.
+   ============================================================ */
+
+@keyframes dcms-fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes dcms-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+@keyframes dcms-pop {
+  0%   { transform: scale(0.85); opacity: 0; }
+  60%  { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+.dcms-enter {
+  animation: dcms-fade-in-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Staggered entrance for list/grid children — apply dcms-enter plus
+   one of these on successive siblings (nth-child driven, no JS needed) */
+.dcms-stagger > * {
+  animation: dcms-fade-in-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.dcms-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.dcms-stagger > *:nth-child(2) { animation-delay: 40ms; }
+.dcms-stagger > *:nth-child(3) { animation-delay: 80ms; }
+.dcms-stagger > *:nth-child(4) { animation-delay: 120ms; }
+.dcms-stagger > *:nth-child(5) { animation-delay: 160ms; }
+.dcms-stagger > *:nth-child(6) { animation-delay: 200ms; }
+.dcms-stagger > *:nth-child(n+7) { animation-delay: 240ms; }
+
+.dcms-card {
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms ease, border-color 180ms ease;
+}
+.dcms-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.12);
+}
+
+.dcms-press {
+  transition: transform 120ms ease, filter 120ms ease;
+}
+.dcms-press:active {
+  transform: scale(0.96);
+}
+
+.dcms-skeleton {
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 20%, #f1f5f9 40%);
+  background-size: 800px 100%;
+  animation: dcms-shimmer 1.4s ease-in-out infinite;
+}
+
+.dcms-pop {
+  animation: dcms-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Smooth expand/collapse for collapsible sections. Panels render with
+   a max-height transition rather than snapping open/shut. */
+.dcms-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dcms-collapse.dcms-collapse-open {
+  grid-template-rows: 1fr;
+}
+.dcms-collapse > div {
+  overflow: hidden;
+}
+
+/* Progress fill — the signature element. Width is set inline per
+   student's actual clearance progress; the transition is what animates
+   it in on load/update. */
+.dcms-progress-fill {
+  transition: width 900ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dcms-enter,
+  .dcms-stagger > *,
+  .dcms-pop {
+    animation: none !important;
+  }
+  .dcms-card,
+  .dcms-press,
+  .dcms-progress-fill,
+  .dcms-collapse {
+    transition: none !important;
+  }
+  .dcms-skeleton {
+    animation: none !important;
+    background: #eef2f6;
+  }
+}

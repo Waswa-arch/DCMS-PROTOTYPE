@@ -41,6 +41,7 @@ export async function runSeeds() {
       { name: 'School of Hospitality', type: 'SCHOOL', school_code: 'HOSP' },
       { name: 'School of Music and Communication', type: 'SCHOOL', school_code: 'MUSIC_COMM' },
       { name: 'School of Law', type: 'SCHOOL', school_code: 'LAW' },
+      { name: 'School of Business', type: 'SCHOOL', school_code: 'BUS' },
     ];
 
     const existingCount = await db.get(
@@ -93,6 +94,7 @@ export async function runSeeds() {
       'School of Hospitality': 'HOSP',
       'School of Music and Communication': 'MUSC',
       'School of Law': 'LAW',
+       'School of Business': 'BUS',
     };
 
     for (const [name, code] of Object.entries(officerCodeMap)) {

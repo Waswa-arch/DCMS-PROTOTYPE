@@ -147,12 +147,12 @@ const OfficerDashboard = () => {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 dcms-enter">
         {/* OFFICER IDENTITY BANNER — confirms at a glance who's logged in
             and which department they're acting for, before any action is
             taken. Sourced from the login response (user.department_name),
             not a separate fetch. */}
-        <div className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm dcms-card">
           <div className="h-10 w-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-black flex-shrink-0">
             {user?.name ? user.name.charAt(0).toUpperCase() : 'O'}
           </div>
@@ -186,21 +186,21 @@ const OfficerDashboard = () => {
             makes "Flagged" an actionable number instead of a dead end —
             previously getOfficerQueue only ever returned PENDING items, so
             a flagged item had no UI path back into view once flagged. */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4 dcms-stagger">
           {STAT_CARDS.map((card) => {
             const isActive = statusFilter === card.status;
             return (
               <button
                 key={card.status}
                 onClick={() => setStatusFilter(card.status)}
-                className={`bg-white p-4 rounded-xl border shadow-sm text-left transition-colors ${
+                className={`dcms-card dcms-press bg-white p-4 rounded-xl border shadow-sm text-left transition-all duration-200 ${
                   isActive ? card.activeClasses : 'border-slate-100 hover:border-slate-200'
                 }`}
               >
                 <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   {card.label}
                 </div>
-                <div className={`text-2xl font-black mt-1 ${card.valueClasses}`}>
+                <div className={`text-2xl font-black mt-1 transition-colors duration-200 ${card.valueClasses}`}>
                   {stats[card.status]}
                 </div>
               </button>
@@ -229,8 +229,10 @@ const OfficerDashboard = () => {
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-slate-400 text-sm">
-              Loading {queueLabel.toLowerCase()} items...
+            <div className="p-4 space-y-3">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-16 dcms-skeleton rounded-lg" style={{ animationDelay: `${i * 80}ms` }} />
+              ))}
             </div>
           ) : filteredQueue.length === 0 ? (
             <div className="px-6 py-12 text-center">
@@ -255,11 +257,11 @@ const OfficerDashboard = () => {
               )}
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-slate-100 dcms-stagger">
               {filteredQueue.map((item) => (
                 <div
                   key={item.item_id}
-                  className="p-4 flex flex-col lg:flex-row lg:items-start justify-between gap-4 hover:bg-slate-50/50 transition-colors"
+                  className="p-4 flex flex-col lg:flex-row lg:items-start justify-between gap-4 hover:bg-slate-50/50 transition-colors duration-200"
                 >
                   <div className="space-y-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -324,14 +326,21 @@ const OfficerDashboard = () => {
                         <button
                           onClick={() => handleAction(item.item_id, 'APPROVED')}
                           disabled={actioning !== null}
-                          className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors"
+                          className="dcms-press bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors"
                         >
                           {actioning === item.item_id ? '...' : 'Approve'}
                         </button>
                         <button
+                          onClick={() => handleAction(item.item_id, 'NO_OBLIGATION')}
+                          disabled={actioning !== null}
+                          className="dcms-press bg-slate-500 hover:bg-slate-600 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors"
+                        >
+                          {actioning === item.item_id ? '...' : 'No Obligation'}
+                        </button>
+                        <button
                           onClick={() => handleAction(item.item_id, 'FLAGGED')}
                           disabled={actioning !== null}
-                          className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors"
+                          className="dcms-press bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors"
                         >
                           {actioning === item.item_id ? '...' : 'Flag'}
                         </button>
@@ -344,7 +353,7 @@ const OfficerDashboard = () => {
                       <button
                         onClick={() => handleAction(item.item_id, 'APPROVED')}
                         disabled={actioning !== null}
-                        className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors"
+                        className="dcms-press bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors"
                       >
                         {actioning === item.item_id ? '...' : 'Reverse to Approved'}
                       </button>
@@ -369,7 +378,7 @@ const OfficerDashboard = () => {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <button
             onClick={() => setHistoryOpen((prev) => !prev)}
-            className="w-full bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between hover:bg-slate-100 transition-colors"
+            className="dcms-press w-full bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between hover:bg-slate-100 transition-colors duration-200"
           >
             <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
               My Recent Actions
@@ -379,24 +388,26 @@ const OfficerDashboard = () => {
             </span>
           </button>
 
-          {historyOpen && (
-            history.length === 0 ? (
-              <div className="px-6 py-8 text-center text-xs text-slate-400">
-                No actions recorded yet.
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {history.map((entry) => (
-                  <div key={entry.id} className="px-4 py-3">
-                    <p className="text-xs text-slate-600">{entry.details}</p>
-                    <p className="text-[10px] text-slate-400 mt-1 font-mono">
-                      {new Date(entry.created_at.replace(' ', 'T')).toLocaleString()}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )
-          )}
+          <div className={`dcms-collapse ${historyOpen ? 'dcms-collapse-open' : ''}`}>
+            <div>
+              {history.length === 0 ? (
+                <div className="px-6 py-8 text-center text-xs text-slate-400">
+                  No actions recorded yet.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 dcms-stagger">
+                  {history.map((entry) => (
+                    <div key={entry.id} className="px-4 py-3">
+                      <p className="text-xs text-slate-600">{entry.details}</p>
+                      <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                        {new Date(entry.created_at.replace(' ', 'T')).toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* FULLY-APPROVED STUDENTS — cross-department view, only rendered if
@@ -405,17 +416,17 @@ const OfficerDashboard = () => {
             section simply doesn't render — no error shown, no explanation
             needed, since most officers should never know this view exists. */}
         {approvedStudents !== null && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="dcms-enter bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="bg-slate-50 border-b border-slate-200 px-4 py-3">
               <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                 Fully Cleared Students — {approvedStudents.length} {approvedStudents.length === 1 ? 'student' : 'students'}
               </h2>
             </div>
-<div className="flex items-center justify-between mb-4">
+<div className="flex items-center justify-between mb-4 px-4 pt-4">
   <button
     onClick={handleBulkGenerate}
     disabled={bulkGenerating || approvedStudents.length === 0}
-    className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+    className="dcms-press px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
   >
     {bulkGenerating ? 'Generating...' : `Generate All Certificates (${approvedStudents.length})`}
   </button>
@@ -436,9 +447,9 @@ const OfficerDashboard = () => {
                 No students have completed clearance across all departments yet.
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-slate-100 dcms-stagger">
                 {approvedStudents.map((student) => (
-                  <div key={student.student_id} className="px-4 py-3 flex items-center justify-between gap-4">
+                  <div key={student.student_id} className="px-4 py-3 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors duration-200">
                     <div>
                       <div className="text-sm font-bold text-slate-800">{student.student_name}</div>
                       <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">

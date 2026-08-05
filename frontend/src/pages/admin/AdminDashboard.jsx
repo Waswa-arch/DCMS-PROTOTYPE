@@ -16,6 +16,33 @@ import {
   TrendingDown,
 } from 'lucide-react';
 
+// Counts up from 0 to `value` on mount/change — small, purposeful motion
+// on the stat cards rather than numbers just appearing.
+const AnimatedNumber = ({ value }) => {
+  const [display, setDisplay] = useState(0);
+  const prevValue = React.useRef(0);
+
+  useEffect(() => {
+    const from = prevValue.current;
+    const to = value || 0;
+    if (from === to) return;
+    const duration = 500;
+    const start = performance.now();
+    let raf;
+    const tick = (now) => {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(from + (to - from) * eased));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+      else prevValue.current = to;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+
+  return <>{display}</>;
+};
+
 export default function AdminDashboard() {
   const [officers, setOfficers] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -180,7 +207,7 @@ export default function AdminDashboard() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 dcms-enter">
 
         {/* HEADER */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -195,9 +222,9 @@ export default function AdminDashboard() {
           <button
             onClick={fetchData}
             disabled={loading}
-            className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+            className="dcms-press flex items-center gap-2 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-3.5 w-3.5 transition-transform duration-300 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         </div>
@@ -211,7 +238,7 @@ export default function AdminDashboard() {
 
         {/* UNCOVERED DEPARTMENTS WARNING BANNER */}
         {uncoveredDepts.length > 0 && (
-          <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 flex items-start gap-3">
+          <div className="dcms-enter bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 flex items-start gap-3">
             <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
             <div>
               <p className="text-xs font-bold text-amber-700 uppercase tracking-wide">
@@ -227,52 +254,52 @@ export default function AdminDashboard() {
         )}
 
         {/* STATS CARDS */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 dcms-stagger">
+          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm dcms-card">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Students</div>
             <div className="text-2xl font-black text-slate-800 mt-1 flex items-center gap-2">
               <Users className="h-5 w-5 text-indigo-500" />
-              {stats ? stats.students : '—'}
+              {stats ? <AnimatedNumber value={stats.students} /> : '—'}
             </div>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm dcms-card">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Officers</div>
             <div className="text-2xl font-black text-slate-800 mt-1 flex items-center gap-2">
               <Users className="h-5 w-5 text-emerald-500" />
-              {stats ? stats.officers : '—'}
+              {stats ? <AnimatedNumber value={stats.officers} /> : '—'}
             </div>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm dcms-card">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Departments</div>
             <div className="text-2xl font-black text-slate-800 mt-1 flex items-center gap-2">
               <Building2 className="h-5 w-5 text-teal-500" />
-              {stats ? stats.departments : '—'}
+              {stats ? <AnimatedNumber value={stats.departments} /> : '—'}
             </div>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm dcms-card">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active</div>
             <div className="text-2xl font-black text-slate-800 mt-1 flex items-center gap-2">
               <Activity className="h-5 w-5 text-amber-500" />
-              {stats ? stats.clearance.ACTIVE : '—'}
+              {stats ? <AnimatedNumber value={stats.clearance.ACTIVE} /> : '—'}
             </div>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm dcms-card">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Approved</div>
             <div className="text-2xl font-black text-slate-800 mt-1 flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-emerald-500" />
-              {stats ? stats.clearance.APPROVED : '—'}
+              {stats ? <AnimatedNumber value={stats.clearance.APPROVED} /> : '—'}
             </div>
           </div>
 
           {/* CLICKABLE FLAGGED CARD */}
           <button
             onClick={() => setFlaggedPanelOpen((prev) => !prev)}
-            className="bg-white p-4 rounded-xl border border-rose-200 shadow-sm hover:bg-rose-50 transition-colors text-left w-full"
+            className="dcms-card dcms-press bg-white p-4 rounded-xl border border-rose-200 shadow-sm hover:bg-rose-50 transition-all duration-200 text-left w-full"
           >
             <div className="text-[11px] font-bold text-rose-400 uppercase tracking-wider">Flagged</div>
             <div className="text-2xl font-black text-slate-800 mt-1 flex items-center gap-2">
-              <Flag className="h-5 w-5 text-rose-500" />
-              {stats ? stats.clearance.FLAGGED : '—'}
+              <Flag className={`h-5 w-5 text-rose-500 ${stats?.clearance?.FLAGGED > 0 ? 'dcms-pop' : ''}`} />
+              {stats ? <AnimatedNumber value={stats.clearance.FLAGGED} /> : '—'}
             </div>
             <div className="text-[10px] text-rose-400 mt-1 font-medium">
               {flaggedPanelOpen ? 'Hide details ▲' : 'Click to view ▼'}
@@ -282,7 +309,7 @@ export default function AdminDashboard() {
 
         {/* FLAGGED ITEMS DETAIL PANEL */}
         {flaggedPanelOpen && (
-          <div className="bg-white rounded-xl border border-rose-200 shadow-sm overflow-hidden">
+          <div className="dcms-enter bg-white rounded-xl border border-rose-200 shadow-sm overflow-hidden">
             <div className="bg-rose-50 border-b border-rose-200 px-4 py-3 flex items-center gap-2">
               <Flag className="h-3.5 w-3.5 text-rose-500" />
               <h2 className="text-xs font-bold text-rose-700 uppercase tracking-wider">
@@ -294,9 +321,9 @@ export default function AdminDashboard() {
                 No flagged items at this time.
               </div>
             ) : (
-              <div className="divide-y divide-rose-50">
+              <div className="divide-y divide-rose-50 dcms-stagger">
                 {flaggedItems.map((item) => (
-                  <div key={item.item_id} className="p-4 hover:bg-rose-50/40 transition-colors">
+                  <div key={item.item_id} className="p-4 hover:bg-rose-50/40 transition-colors duration-200">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div>
                         <div className="text-sm font-bold text-slate-800">{item.student_name}</div>
@@ -340,17 +367,21 @@ export default function AdminDashboard() {
             </h2>
           </div>
           {loading ? (
-            <div className="p-8 text-center text-xs text-slate-400">Loading officer roster...</div>
+            <div className="p-4 space-y-3">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-14 dcms-skeleton rounded-lg" style={{ animationDelay: `${i * 80}ms` }} />
+              ))}
+            </div>
           ) : officers.length === 0 ? (
             <div className="p-8 text-center text-xs text-slate-400">
               No officers registered yet. Officers must register with a @kabarak.edu.ke email.
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-slate-100 dcms-stagger">
               {officers.map((officer) => (
                 <div
                   key={officer.id}
-                  className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 transition-colors"
+                  className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 transition-colors duration-200"
                 >
                   <div className="space-y-1 min-w-0">
                     <div className="text-sm font-bold text-slate-800">{officer.name}</div>
@@ -391,13 +422,13 @@ export default function AdminDashboard() {
                       <>
                         <button
                           onClick={() => handleConfirmReassign(officer.id)}
-                          className="text-xs font-bold px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                          className="dcms-press text-xs font-bold px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
                         >
                           Confirm
                         </button>
                         <button
                           onClick={() => handleCancelPending(officer.id)}
-                          className="text-xs font-bold px-3 py-2 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+                          className="dcms-press text-xs font-bold px-3 py-2 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
                         >
                           Cancel
                         </button>
@@ -420,13 +451,13 @@ export default function AdminDashboard() {
               Department Registry
             </h2>
           </div>
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100 dcms-stagger">
             {departments.map((dept) => {
               const isUncovered = uncoveredDepts.some((u) => u.id === dept.id);
               return (
                 <div
                   key={dept.id}
-                  className={`px-4 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors ${
+                  className={`px-4 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors duration-200 ${
                     isUncovered ? 'bg-amber-50/50' : ''
                   }`}
                 >
@@ -453,7 +484,7 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <button
             onClick={() => setApprovedStudentsOpen((prev) => !prev)}
-            className="w-full bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-2 hover:bg-slate-100 transition-colors"
+            className="dcms-press w-full bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-2 hover:bg-slate-100 transition-colors duration-200"
           >
             <div className="flex items-center gap-2">
               <GraduationCap className="h-3.5 w-3.5 text-slate-400" />
@@ -466,64 +497,66 @@ export default function AdminDashboard() {
               {approvedStudentsOpen ? 'Hide ▲' : 'Show ▼'}
             </span>
           </button>
-          {approvedStudentsOpen && (
-            approvedStudents.length === 0 ? (
-              <div className="p-8 text-center text-xs text-slate-400">
-                No students have completed clearance across all departments yet.
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {approvedStudents.map((student) => (
-                  <div
-                    key={student.student_id}
-                    className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 transition-colors"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-slate-800">{student.student_name}</div>
-                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
-                        <span className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-                          {student.student_id_number}
-                        </span>
-                        <span>{student.student_email}</span>
-                      </div>
-                      {certResults[student.request_id] && (
-                        <div className={`text-[10px] mt-1 font-medium ${
-                          certResults[student.request_id].type === 'success' ? 'text-emerald-600' : 'text-rose-600'
-                        }`}>
-                          {certResults[student.request_id].message}
+          <div className={`dcms-collapse ${approvedStudentsOpen ? 'dcms-collapse-open' : ''}`}>
+            <div>
+              {approvedStudents.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  No students have completed clearance across all departments yet.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 dcms-stagger">
+                  {approvedStudents.map((student) => (
+                    <div
+                      key={student.student_id}
+                      className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 transition-colors duration-200"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-slate-800">{student.student_name}</div>
+                        <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
+                          <span className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                            {student.student_id_number}
+                          </span>
+                          <span>{student.student_email}</span>
                         </div>
-                      )}
+                        {certResults[student.request_id] && (
+                          <div className={`dcms-enter text-[10px] mt-1 font-medium ${
+                            certResults[student.request_id].type === 'success' ? 'text-emerald-600' : 'text-rose-600'
+                          }`}>
+                            {certResults[student.request_id].message}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
+                          {formatTimestamp(student.cleared_at)}
+                        </span>
+                        <button
+                          onClick={() => handleGenerateCertificate(student.request_id)}
+                          disabled={certActioning === student.request_id}
+                          className="dcms-press text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50 transition-colors"
+                        >
+                          {certActioning === student.request_id ? '...' : 'Generate'}
+                        </button>
+                        <button
+                          onClick={() => handleDownloadCertificate(student.request_id)}
+                          className="dcms-press text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                        >
+                          Download
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
-                        {formatTimestamp(student.cleared_at)}
-                      </span>
-                      <button
-                        onClick={() => handleGenerateCertificate(student.request_id)}
-                        disabled={certActioning === student.request_id}
-                        className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50 transition-colors"
-                      >
-                        {certActioning === student.request_id ? '...' : 'Generate'}
-                      </button>
-                      <button
-                        onClick={() => handleDownloadCertificate(student.request_id)}
-                        className="text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
-                      >
-                        Download
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )
-          )}
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* AUDIT LOG */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <button
             onClick={() => setAuditOpen((prev) => !prev)}
-            className="w-full bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-2 hover:bg-slate-100 transition-colors"
+            className="dcms-press w-full bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-2 hover:bg-slate-100 transition-colors duration-200"
           >
             <div className="flex items-center gap-2">
               <Clock className="h-3.5 w-3.5 text-slate-400" />
@@ -536,20 +569,21 @@ export default function AdminDashboard() {
               {auditOpen ? 'Hide ▲' : 'Show ▼'}
             </span>
           </button>
-          {auditOpen && (
-            recentAudit.length === 0 ? (
-              <div className="p-8 text-center text-xs text-slate-400">
-                No audit activity recorded yet.
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {recentAudit.map((entry) => {
-                  const isOverride = entry.actor_role === 'ADMIN';
-                  return (
-                    <div
-                      key={entry.id}
-                      className="p-4 flex items-start gap-3 hover:bg-slate-50/50 transition-colors"
-                    >
+          <div className={`dcms-collapse ${auditOpen ? 'dcms-collapse-open' : ''}`}>
+            <div>
+              {recentAudit.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  No audit activity recorded yet.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 dcms-stagger">
+                  {recentAudit.map((entry) => {
+                    const isOverride = entry.actor_role === 'ADMIN';
+                    return (
+                      <div
+                        key={entry.id}
+                        className="p-4 flex items-start gap-3 hover:bg-slate-50/50 transition-colors duration-200"
+                      >
                       <div
                         className={`mt-0.5 flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center ${
                           isOverride ? 'bg-violet-100 text-violet-600' : 'bg-slate-100 text-slate-500'
@@ -583,16 +617,17 @@ export default function AdminDashboard() {
                     </div>
                   );
                 })}
-              </div>
-            )
-          )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* ANALYTICS & REPORTING */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <button
             onClick={() => setAnalyticsOpen((prev) => !prev)}
-            className="w-full bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-2 hover:bg-slate-100 transition-colors"
+            className="dcms-press w-full bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-2 hover:bg-slate-100 transition-colors duration-200"
           >
             <div className="flex items-center gap-2">
               <BarChart3 className="h-3.5 w-3.5 text-slate-400" />
