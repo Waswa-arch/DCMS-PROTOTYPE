@@ -48,8 +48,15 @@ const OfficerDashboard = () => {
       const { data } = await api.get('/clearance/approved-students');
       setApprovedStudents(data.students || []);
     } catch (err) {
-      // 403 means this officer isn't Academic Registrar — section just stays hidden, not an error
       setApprovedStudents(null);
+    }
+  };
+
+  const checkStalePending = async () => {
+    try {
+      await api.post('/clearance/officer/notify-stale');
+    } catch (err) {
+      // Silent — stale check failure should never block the dashboard
     }
   };
   const handleBulkGenerate = async () => {
@@ -88,6 +95,7 @@ const OfficerDashboard = () => {
     fetchStats();
     fetchHistory();
     fetchApprovedStudents();
+    checkStalePending();
   }, []);
 
   useEffect(() => {

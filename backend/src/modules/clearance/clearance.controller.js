@@ -825,3 +825,71 @@ export const bulkGenerateCertificates = async (req, res) => {
     return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
   }
 };
+/**
+ * OFFICER: CHECK AND NOTIFY STALE PENDING ITEMS
+ * Checks for items in the officer's department that have been PENDING
+ * for more than 5 days. Inserts a notification for each stale item
+ * that hasn't already been notified today. Called on officer dashboard
+ * load so officers are alerted proactively without a separate job scheduler.
+ */
+export const notifyStalePendingItems = async (req, res) => {
+  try {
+    const officerDeptId = await resolveOfficerDepartmentId(req.user);
+
+    if (!officerDeptId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access Denied: Your profile is not bound to a department.'
+      });
+    }
+
+    // Find all items PENDING for more than 5 days in this officer's department
+    const staleItems = await db.all(`
+      SELECT 
+        dci.id as item_id,
+        u.name as student_name,
+        u.id_number as student_id_number,
+        cr.created_at as request_created_at,
+        CAST((julianday('now') - julianday(cr.created_at)) AS INTEGER) as days_waiting
+      FROM dept_clearance_items dci
+      JOIN clearance_requests cr ON dci.request_id = cr.id
+      JOIN users u ON cr.student_id = u.id
+      WHERE dci.department_id = ?
+        AND dci.status = 'PENDING'
+        AND (julianday('now') - julianday(cr.created_at)) > 5
+      ORDER BY cr.created_at ASC
+    `, [officerDeptId]);
+
+    if (staleItems.length === 0) {
+      return res.status(200).json({ success: true, stale_count: 0 });
+    }
+
+    // For each stale item, check if a stale notification was already sent
+    // today — avoid flooding the bell with duplicate alerts on every refresh
+    for (const item of staleItems) {
+      const alreadyNotifiedToday = await db.get(`
+        SELECT id FROM notifications
+        WHERE user_id = ?
+          AND title = 'Stale Clearance Alert'
+          AND message LIKE ?
+          AND date(created_at) = date('now')
+      `, [req.user.id, `%${item.student_id_number}%`]);
+
+      if (!alreadyNotifiedToday) {
+        await db.run(`
+          INSERT INTO notifications (user_id, title, message)
+          VALUES (?, 'Stale Clearance Alert', ?)
+        `, [
+          req.user.id,
+          `${item.student_name} (${item.student_id_number}) has been pending clearance in your department for ${item.days_waiting} day${item.days_waiting === 1 ? '' : 's'}. Please review.`
+        ]);
+      }
+    }
+
+    return res.status(200).json({ success: true, stale_count: staleItems.length });
+
+  } catch (error) {
+    console.error('Stale Pending Notification Error:', error);
+    return res.status(500).json({ success: false, message: 'An internal server error occurred.' });
+  }
+};
