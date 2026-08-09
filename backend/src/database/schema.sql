@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS departments (
   sequence_order INTEGER NOT NULL UNIQUE,
   department_type TEXT CHECK(department_type IN ('UNIVERSAL', 'SCHOOL')) NOT NULL DEFAULT 'UNIVERSAL',
   school_code TEXT NULL,
-  officer_code TEXT NULL 
+  officer_code TEXT NULL
 );
 
 -- 3. WORKFLOW TRACKING MASTER LAYER
